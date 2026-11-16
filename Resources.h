@@ -287,6 +287,8 @@
 #define IDC_ARTWORK_FILE_PATH_LBL       6120
 #define IDC_ARTWORK_FILE_PATH           6122
 
+#define IDC_ARTWORK_MASK                6128
+
 #pragma endregion
 
 #define IDC_DIAGNOSTICS                 6200

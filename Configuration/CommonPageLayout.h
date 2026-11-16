@@ -118,6 +118,12 @@
     #define X_G02    X_B06 + 5
     #define Y_G02    Y_G12 + H_G12 + IY
 
+    // Checkbox: Mask
+    #define W_G36    50
+    #define H_G36    H_CHB
+    #define X_G36    X_G02 + W_G02 + IX
+    #define Y_G36    Y_G02
+
     /** Fit mode **/
 
     // Label

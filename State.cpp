@@ -43,7 +43,7 @@ void state_t::Reset() noexcept
     _Bounds = { };
     _PageIndex = 0;
 
-    _TargetRefreshRate = 60; // Hz
+    _TargetRefreshRate = 30; // Hz
     _SleepTime = 200; // μs
 
     _UseHardwareRendering = true;
@@ -197,6 +197,7 @@ void state_t::Reset() noexcept
 
     _BackgroundMode_Deprecated = BackgroundMode::Artwork;
     _ShowArtworkOnBackground = true;
+    _ArtworkRadialMask = true;
     _ArtworkOpacity = 1.f;
     _ArtworkBlurSigma = 0.f;
     _ArtworkFilePath.clear();
@@ -270,9 +271,9 @@ void state_t::Reset() noexcept
     _ResetPeaksOnTrackChange = false;
 
     // Radial Bars
-    _InnerRadius = 0.2f;
+    _InnerRadius = 0.75f;
     _OuterRadius = 1.0f;
-    _AngularVelocity = 60.f; // degrees / sec
+    _AngularVelocity = 20.f; // degrees / sec
 
     // Curve
     _LineWidth_Deprecated = 2.f;
@@ -521,6 +522,7 @@ state_t & state_t::operator=(const state_t & other) noexcept
 //      _BackgroundMode_Deprecated = other._BackgroundMode_Deprecated;
 
         _ShowArtworkOnBackground = other._ShowArtworkOnBackground;
+        _ArtworkRadialMask = other._ArtworkRadialMask;
         _ArtworkType = other._ArtworkType;
 
         _ArtworkOpacity = other._ArtworkOpacity;
@@ -1065,6 +1067,11 @@ void state_t::Read(stream_reader * stream, size_t size, abort_callback & abortHa
         {
             stream->read_object_t(_OpacityMode, abortHandler);
         }
+
+        if (Version >= 36)
+        {
+            stream->read_object_t(_ArtworkRadialMask, abortHandler);
+        }
     }
     catch (exception & ex)
     {
@@ -1411,6 +1418,9 @@ void state_t::Write(stream_writer * stream, abort_callback & abortHandler, bool 
 
         // Version 35, v0.10.0-beta1
         stream->write_object_t(_OpacityMode, abortHandler);
+
+        // Version 36
+        stream->write_object_t(_ArtworkRadialMask, abortHandler);
     }
     catch (exception & ex)
     {
@@ -1671,6 +1681,7 @@ void state_t::FromJSON(const char * data, size_t size, bool isPreset)
         _ColorOrder              = std::clamp(Artwork.value("colorOrder",           _ColorOrder),               ColorOrder::Min,            ColorOrder::Max);
 
         _ShowArtworkOnBackground = Artwork.value("showArtworkOnBackground",         _ShowArtworkOnBackground);
+        _ArtworkRadialMask       = Artwork.value("radialMask",                     _ArtworkRadialMask);
 
         _FitMode                 = std::clamp(Artwork.value("fitMode",              _FitMode),                  FitMode::Min,               FitMode::Max);
         _AllowUpscaling          = Artwork.value("allowUpscaling",                  _AllowUpscaling);
@@ -1996,6 +2007,7 @@ json state_t::ToJSON(bool isPreset) const
                 { "colorOrder", _ColorOrder },
 
                 { "showArtworkOnBackground", _ShowArtworkOnBackground },
+                { "radialMask", _ArtworkRadialMask },
 
                 { "fitMode", _FitMode },
                 { "allowUpscaling", _AllowUpscaling },

@@ -58,6 +58,8 @@ private:
     HRESULT CreateDeviceSpecificResources(ID2D1DeviceContext * deviceContext) noexcept;
     void DeleteDeviceSpecificResources() noexcept;
 
+    void Draw(render_context_t & renderContext, const D2D1_RECT_F & rect, FLOAT scalar, const state_t * state) noexcept;
+
     void AdjustRect(const FitMode fitMode, const bool allowUpscaling, FLOAT & scalar, D2D1_RECT_F & rect) const noexcept;
 
 private:

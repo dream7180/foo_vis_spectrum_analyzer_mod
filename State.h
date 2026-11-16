@@ -271,6 +271,7 @@ public:
         ColorOrder _ColorOrder;
 
         bool _ShowArtworkOnBackground;
+        bool _ArtworkRadialMask;                                        // True if the artwork is rendered inside a circular mask with a diameter equal to the inner radius of the radial visualizations.
         ArtworkType _ArtworkType;
 
         FLOAT _ArtworkOpacity;                                          // [0, 1]
@@ -409,7 +410,7 @@ private:
     #pragma endregion
 
 private:
-    static constexpr size_t _CurrentVersion = 35; // v0.10.0.0-beta1
+    static constexpr size_t _CurrentVersion = 36; // v0.10.0.0-beta1
     static constexpr uint32_t _SchemaVersion = 3; // v0.13.0.0-alpha2
 };
 

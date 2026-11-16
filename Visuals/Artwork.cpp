@@ -221,14 +221,74 @@ void artwork_t::Render(render_context_t & renderContext, const D2D1_RECT_F & rec
     if (_Bitmap == nullptr)
         return;
 
+    const bool IsRadial = (state->_VisualizationType == VisualizationType::RadialBars) || (state->_VisualizationType == VisualizationType::RadialCurve);
+    const bool UseRadialMask = IsRadial && state->_ArtworkRadialMask;
+
     FLOAT Scalar = 1.f;
     D2D1_RECT_F Rect = rect;
 
-    AdjustRect(state->_FitMode, state->_AllowUpscaling, Scalar, Rect);
+    if (UseRadialMask)
+    {
+        // Render the artwork inside a circular mask with a diameter equal to the inner radius of the radial visualization.
+        // Note: The side is computed the same way as in the radial renderers (Spectrum.cpp) so the mask exactly matches the inner circle.
+        const D2D1_SIZE_F Size = _Bitmap->GetSize();
 
+        const FLOAT Side = std::min(rect.right - rect.left, rect.bottom - rect.top) / 2.f;
+        const FLOAT MaskRadius = Side * state->_InnerRadius;
+
+        if ((MaskRadius > 0.f) && (Size.width > 0.f) && (Size.height > 0.f))
+        {
+            // Scale the artwork, preserving its aspect ratio, so that it completely covers the circle. The parts that stick out are clipped by the mask.
+            const FLOAT Diameter = 2.f * MaskRadius;
+
+            Scalar = std::max(Diameter / Size.width, Diameter / Size.height);
+
+            const FLOAT ScaledWidth  = Size.width  * Scalar;
+            const FLOAT ScaledHeight = Size.height * Scalar;
+
+            const D2D1_POINT_2F Center = { (rect.left + rect.right) / 2.f, (rect.top + rect.bottom) / 2.f };
+
+            Rect = D2D1::RectF(Center.x - (ScaledWidth / 2.f), Center.y - (ScaledHeight / 2.f), Center.x + (ScaledWidth / 2.f), Center.y + (ScaledHeight / 2.f));
+        }
+
+        // Clip all drawing to the circular mask.
+        ComPtr<ID2D1Factory> Factory;
+
+        renderContext.D2DDeviceContext->GetFactory(Factory.GetAddressOf());
+
+        ComPtr<ID2D1EllipseGeometry> EllipseGeometry;
+
+        const D2D1_POINT_2F Center = { (Rect.left + Rect.right) / 2.f, (Rect.top + Rect.bottom) / 2.f };
+
+        if (SUCCEEDED(Factory->CreateEllipseGeometry(D2D1::Ellipse(Center, MaskRadius, MaskRadius), EllipseGeometry.GetAddressOf())))
+        {
+            const D2D1_LAYER_PARAMETERS LayerParameters = D2D1::LayerParameters(D2D1::InfiniteRect(), EllipseGeometry.Get(), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::IdentityMatrix(), 1.f, nullptr, D2D1_LAYER_OPTIONS_NONE);
+
+            renderContext.D2DDeviceContext->PushLayer(LayerParameters, nullptr);
+
+            Draw(renderContext, Rect, Scalar, state);
+
+            renderContext.D2DDeviceContext->PopLayer();
+        }
+        else
+            Draw(renderContext, Rect, Scalar, state);
+    }
+    else
+    {
+        AdjustRect(state->_FitMode, state->_AllowUpscaling, Scalar, Rect);
+
+        Draw(renderContext, Rect, Scalar, state);
+    }
+}
+
+/// <summary>
+/// Draws the artwork into the specified destination rectangle.
+/// </summary>
+void artwork_t::Draw(render_context_t & renderContext, const D2D1_RECT_F & rect, const FLOAT scalar, const state_t * state) noexcept
+{
     if (state->_ArtworkBlurSigma == 0.f)
     {
-        renderContext.D2DDeviceContext->DrawBitmap(_Bitmap.Get(), Rect, state->_ArtworkOpacity, D2D1_BITMAP_INTERPOLATION_MODE::D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+        renderContext.D2DDeviceContext->DrawBitmap(_Bitmap.Get(), rect, state->_ArtworkOpacity, D2D1_BITMAP_INTERPOLATION_MODE::D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     }
     else
     {
@@ -239,13 +299,13 @@ void artwork_t::Render(render_context_t & renderContext, const D2D1_RECT_F & rec
         const FLOAT DPIScale = DPIX / 96.f;
 
         _ScaleEffect->SetInput(0, _Bitmap.Get());
-        _ScaleEffect->SetValue(D2D1_SCALE_PROP_SCALE, D2D1::Vector2F(Scalar * DPIScale, Scalar * DPIScale));
+        _ScaleEffect->SetValue(D2D1_SCALE_PROP_SCALE, D2D1::Vector2F(scalar * DPIScale, scalar * DPIScale));
 
         _BlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, state->_ArtworkBlurSigma);
 
         _OpacityEffect->SetValue(D2D1_OPACITY_PROP_OPACITY, state->_ArtworkOpacity);
 
-        const D2D1_POINT_2F Offset = { Rect.left, Rect.top };
+        const D2D1_POINT_2F Offset = { rect.left, rect.top };
 
         renderContext.D2DDeviceContext->DrawImage(_OpacityEffect.Get(), Offset);
     }

@@ -28,6 +28,7 @@ BOOL common_page_t::OnInitDialog(CWindow w, LPARAM lParam) noexcept
         { IDC_COLOR_ORDER, "Determines how to sort the colors selected from the artwork." },
 
         { IDC_ARTWORK_BACKGROUND, "Renders artwork on the graph background." },
+        { IDC_ARTWORK_MASK, "Renders the artwork inside a circular mask with a diameter equal to the inner radius of the Radial Bars or Radial Curve visualization. The artwork is scaled, preserving its aspect ratio, to completely fill the circle. Parts that stick out are clipped. Only applies to the Radial Bars and Radial Curve visualization types and disables the Fit mode, Allow upscaling and Fit window settings." },
         { IDC_ARTWORK_TYPE, "Specifies which artwork will be shown on the graph background or will be used to extract colors from." },
 
         { IDC_FIT_MODE, "Determines how over- and undersized artwork is rendered." },
@@ -81,6 +82,7 @@ void common_page_t::InitializeControls() noexcept
     // Artwork
     {
         SendDlgItemMessageW(IDC_ARTWORK_BACKGROUND, BM_SETCHECK, _State->_ShowArtworkOnBackground);
+        SendDlgItemMessageW(IDC_ARTWORK_MASK, BM_SETCHECK, _State->_ArtworkRadialMask);
     }
     {
         auto w = (CComboBox) GetDlgItem(IDC_FIT_MODE);
@@ -233,8 +235,13 @@ void common_page_t::UpdateControls() noexcept
 
     // Artwork
     const bool SupportsArtworkOnBackground = !(IsPeakMeter || IsLevelMeter || IsOscilloscope || IsBitMeter);
+    const bool IsRadial = (_State->_VisualizationType == VisualizationType::RadialBars) || (_State->_VisualizationType == VisualizationType::RadialCurve);
+
+    // The artwork mask only applies to the radial visualizations and disables the fit settings.
+    const bool UseRadialMask = IsRadial && _State->_ArtworkRadialMask;
 
     GetDlgItem(IDC_ARTWORK_BACKGROUND).EnableWindow(SupportsArtworkOnBackground);
+    GetDlgItem(IDC_ARTWORK_MASK).EnableWindow(SupportsArtworkOnBackground && _State->_ShowArtworkOnBackground && IsRadial);
 
     for (const auto Id :
     {
@@ -243,9 +250,9 @@ void common_page_t::UpdateControls() noexcept
         IDC_ARTWORK_BLUR_SIGMA, IDC_ARTWORK_BLUR_SIGMA_SLIDER,
         IDC_ARTWORK_FILE_PATH
     })
-        GetDlgItem(Id).EnableWindow(SupportsArtworkOnBackground && _State->_ShowArtworkOnBackground);
+        GetDlgItem(Id).EnableWindow(SupportsArtworkOnBackground && _State->_ShowArtworkOnBackground && !(UseRadialMask && ((Id == IDC_FIT_MODE) || (Id == IDC_FIT_WINDOW))));
 
-    GetDlgItem(IDC_ALLOW_UPSCALING).EnableWindow(SupportsArtworkOnBackground && _State->_ShowArtworkOnBackground && (_State->_FitMode != FitMode::Free));
+    GetDlgItem(IDC_ALLOW_UPSCALING).EnableWindow(SupportsArtworkOnBackground && _State->_ShowArtworkOnBackground && (_State->_FitMode != FitMode::Free) && !UseRadialMask);
 
     // Diagnostics
     GetDlgItem(IDC_SHOW_WINDOW_FUNCTION).EnableWindow(IsSpectrum);
@@ -475,6 +482,16 @@ void common_page_t::OnButtonClick(UINT, int id, CWindow) noexcept
         case IDC_ARTWORK_BACKGROUND:
         {
             _State->_ShowArtworkOnBackground = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+
+            UpdateControls();
+
+            ChangedSettings = ConfigurationChanges::RenderLoop;
+            break;
+        }
+
+        case IDC_ARTWORK_MASK:
+        {
+            _State->_ArtworkRadialMask = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
 
             UpdateControls();
 

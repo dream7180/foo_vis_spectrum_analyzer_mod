@@ -195,7 +195,10 @@ void graph_t::RenderBackground(artwork_t & artwork) noexcept
     if (artwork.Bitmap() == nullptr)
         return;
 */
-    artwork.Render(_RenderContext, _State._FitWindow ? _Visualization->GetRect() : _Visualization->GetClientRect(), &_State);
+    // When the artwork mask is active, the artwork is always fitted to the client area of the visualization so the mask matches the inner circle of the radial visualization.
+    const bool UseRadialMask = _State._ArtworkRadialMask && ((_State._VisualizationType == VisualizationType::RadialBars) || (_State._VisualizationType == VisualizationType::RadialCurve));
+
+    artwork.Render(_RenderContext, (UseRadialMask || !_State._FitWindow) ? _Visualization->GetClientRect() : _Visualization->GetRect(), &_State);
 }
 
 /// <summary>

@@ -209,7 +209,12 @@ HRESULT artwork_t::GetColors(uint32_t colorCount, FLOAT lightnessThreshold, FLOA
 /// <summary>
 /// Renders this instance to the specified render target.
 /// </summary>
-void artwork_t::Render(render_context_t & renderContext, const D2D1_RECT_F & rect, const state_t * state) noexcept
+/// <remarks>
+/// When the artwork mask is active, the center of the mask is the center of <paramref name="rect"/>, while the size of the mask
+/// is based on <paramref name="maskRect"/> (when provided). This matches the radial renderers (see Spectrum.cpp), which are
+/// centered on the graph rectangle, but compute the inner radius from the size of the client area.
+/// </remarks>
+void artwork_t::Render(render_context_t & renderContext, const D2D1_RECT_F & rect, const state_t * state, const D2D1_RECT_F * maskRect) noexcept
 {
     msc::lock_t Lock(_CriticalSection);
 
@@ -233,8 +238,13 @@ void artwork_t::Render(render_context_t & renderContext, const D2D1_RECT_F & rec
         // Note: The side is computed the same way as in the radial renderers (Spectrum.cpp) so the mask exactly matches the inner circle.
         const D2D1_SIZE_F Size = _Bitmap->GetSize();
 
-        const FLOAT Side = std::min(rect.right - rect.left, rect.bottom - rect.top) / 2.f;
+        const D2D1_RECT_F & SideRect = (maskRect != nullptr) ? *maskRect : rect;
+
+        const FLOAT Side = std::min(SideRect.right - SideRect.left, SideRect.bottom - SideRect.top) / 2.f;
         const FLOAT MaskRadius = Side * state->_InnerRadius;
+
+        // The mask is centered on the center of the graph rectangle, just like the radial visualizations.
+        const D2D1_POINT_2F Center = { (rect.left + rect.right) / 2.f, (rect.top + rect.bottom) / 2.f };
 
         if ((MaskRadius > 0.f) && (Size.width > 0.f) && (Size.height > 0.f))
         {
@@ -246,8 +256,6 @@ void artwork_t::Render(render_context_t & renderContext, const D2D1_RECT_F & rec
             const FLOAT ScaledWidth  = Size.width  * Scalar;
             const FLOAT ScaledHeight = Size.height * Scalar;
 
-            const D2D1_POINT_2F Center = { (rect.left + rect.right) / 2.f, (rect.top + rect.bottom) / 2.f };
-
             Rect = D2D1::RectF(Center.x - (ScaledWidth / 2.f), Center.y - (ScaledHeight / 2.f), Center.x + (ScaledWidth / 2.f), Center.y + (ScaledHeight / 2.f));
         }
 
@@ -257,8 +265,6 @@ void artwork_t::Render(render_context_t & renderContext, const D2D1_RECT_F & rec
         renderContext.D2DDeviceContext->GetFactory(Factory.GetAddressOf());
 
         ComPtr<ID2D1EllipseGeometry> EllipseGeometry;
-
-        const D2D1_POINT_2F Center = { (Rect.left + Rect.right) / 2.f, (Rect.top + Rect.bottom) / 2.f };
 
         if (SUCCEEDED(Factory->CreateEllipseGeometry(D2D1::Ellipse(Center, MaskRadius, MaskRadius), EllipseGeometry.GetAddressOf())))
         {

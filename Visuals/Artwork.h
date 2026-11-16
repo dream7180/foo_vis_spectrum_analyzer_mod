@@ -46,7 +46,7 @@ public:
         return _Bitmap->GetSize();
     }
 
-    void Render(render_context_t & renderContext, const D2D1_RECT_F & rect, const state_t * state) noexcept;
+    void Render(render_context_t & renderContext, const D2D1_RECT_F & rect, const state_t * state, const D2D1_RECT_F * maskRect = nullptr) noexcept;
 
     HRESULT GetColors(uint32_t colorCount, FLOAT lightnessThreshold, FLOAT transparencyThreshold, std::vector<D2D1_COLOR_F> & colors) noexcept;
 

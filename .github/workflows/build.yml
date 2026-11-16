@@ -1,0 +1,294 @@
+name: Build
+
+# 依据 README.md「Developing / Requirements / Setup / Building / Packaging」章节生成。
+#
+# 目录布局（${{ github.workspace }}\src 相当于 README 里的工作根目录）：
+#   src\3rdParty\columns_ui_sdk\      <- Columns UI SDK 8.0.0（外部下载）
+#   src\3rdParty\WTL10_10320\         <- WTL 10.0.10320（外部下载）
+#   src\sdk\                          <- foobar2000 SDK 2026-09-17（外部下载）
+#   src\bin, src\bin.x86\             <- 便携版 foobar2000（CI 中用占位文件）
+#   src\foo_vis_spectrum_analyzer\    <- 本仓库
+#   src\out, src\int\                 <- 构建产物
+# 工程文件里到处是 $(SolutionDir)..\xxx，所以仓库必须放在子目录中。
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'MSBuild 配置'
+        type: choice
+        default: Release
+        options: [Release, Debug]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # 与 README.md 中声明的版本保持一致，升级依赖时只改这里
+  FB2K_SDK_VERSION: '2026-09-17'
+  CUI_SDK_VERSION: '8.0.0'
+  WTL_VERSION: '10.0.10320'
+
+  FB2K_SDK_URL: 'https://www.foobar2000.org/downloads/SDK-2026-09-17.7z'
+  CUI_SDK_URL: 'https://yuo.be/_assets/DlSzYITl/columns_ui-sdk-8.0.0.7z'
+  WTL_URL: 'https://sourceforge.net/projects/wtl/files/WTL%2010/WTL%2010.0.10320%20Release/WTL10_10320_Release.zip/download'
+
+  PROJECT_NAME: 'foo_vis_spectrum_analyzer'
+  CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+
+jobs:
+  build:
+    name: Build (x86 + x64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          path: src/foo_vis_spectrum_analyzer
+
+      # 第三方依赖体积不大但下载慢，缓存解压后的结果，key 里带上版本号
+      - name: 缓存第三方依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/3rdParty
+            src/sdk
+          key: fb2k-deps-${{ env.FB2K_SDK_VERSION }}-cui${{ env.CUI_SDK_VERSION }}-wtl${{ env.WTL_VERSION }}-v1
+
+      - name: 准备第三方依赖与目录结构
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+
+          $work = Join-Path $env:GITHUB_WORKSPACE 'src'
+          $tmp  = Join-Path $env:RUNNER_TEMP 'deps'
+          New-Item -ItemType Directory -Force -Path $work, $tmp | Out-Null
+
+          function Find-SevenZip {
+            $candidates = @()
+            $cmd = Get-Command 7z -ErrorAction SilentlyContinue
+            if ($cmd) { $candidates += $cmd.Source }
+            $candidates += (Join-Path $env:ProgramFiles '7-Zip\7z.exe')
+            $candidates += (Join-Path ${env:ProgramFiles(x86)} '7-Zip\7z.exe')
+            foreach ($c in $candidates) {
+              if ($c -and (Test-Path $c)) { return $c }
+            }
+            throw '未找到 7z.exe（foobar2000 SDK 与 Columns UI SDK 都是 .7z 压缩包）'
+          }
+
+          function Get-Dependency([string] $url, [string] $fileName) {
+            $path = Join-Path $tmp $fileName
+            if (-not (Test-Path $path)) {
+              Write-Host "下载 $url"
+              # 用 curl.exe：SourceForge 的跳转用 Invoke-WebRequest 会拿到 HTML 落地页
+              & curl.exe -fsSL --retry 3 --retry-delay 2 -o $path $url
+              if ($LASTEXITCODE -ne 0) { throw "下载失败：$url（curl 退出码 $LASTEXITCODE）" }
+            }
+            if ((Get-Item $path).Length -le 0) { throw "下载的文件为空：$path" }
+            return $path
+          }
+
+          # 解压到临时目录，按标记文件定位压缩包内的真实根目录，再整体拷贝到目标目录。
+          # 三个压缩包的内部布局以后可能会变（例如多套一层文件夹），这样写更稳。
+          function Expand-Into([string] $archive, [string] $marker, [string] $target, [string] $sevenZip) {
+            if (Test-Path (Join-Path $target $marker)) {
+              Write-Host "已存在，跳过：$target"
+              return
+            }
+
+            # 用唯一目录解压，避免残留状态；临时目录随 job 结束自动清理
+            $stage = Join-Path $tmp ([IO.Path]::GetFileNameWithoutExtension($archive) + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+            New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+            if ($archive -like '*.7z') {
+              & $sevenZip x $archive "-o$stage" -y | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw "解压失败：$archive（7z 退出码 $LASTEXITCODE）" }
+            } else {
+              Expand-Archive -LiteralPath $archive -DestinationPath $stage -Force
+            }
+
+            $root = $stage
+            if (-not (Test-Path (Join-Path $root $marker))) {
+              $hit = Get-ChildItem -LiteralPath $stage -Recurse -File -Filter (Split-Path $marker -Leaf) |
+                Select-Object -First 1
+              if (-not $hit) { throw "在 $archive 中找不到 $marker" }
+              $root = $hit.FullName
+              foreach ($segment in ($marker -split '[\\/]')) { $root = Split-Path $root -Parent }
+            }
+
+            New-Item -ItemType Directory -Force -Path $target | Out-Null
+            Get-ChildItem -LiteralPath $root | Copy-Item -Destination $target -Recurse -Force
+          }
+
+          $sevenZip = Find-SevenZip
+
+          # foobar2000 SDK：包内直接是 foobar2000\ pfc\ libPPUI\
+          Expand-Into (Get-Dependency $env:FB2K_SDK_URL "SDK-${env:FB2K_SDK_VERSION}.7z") `
+            'pfc/pfc.vcxproj' (Join-Path $work 'sdk') $sevenZip
+
+          # Columns UI SDK：包内是平铺的 columns_ui-sdk-public.vcxproj + 头文件
+          Expand-Into (Get-Dependency $env:CUI_SDK_URL "columns_ui-sdk-${env:CUI_SDK_VERSION}.7z") `
+            'columns_ui-sdk-public.vcxproj' (Join-Path $work '3rdParty\columns_ui_sdk') $sevenZip
+
+          # WTL：包内直接是 Include\ AppWizard\ Samples\
+          Expand-Into (Get-Dependency $env:WTL_URL "WTL_${env:WTL_VERSION}_Release.zip") `
+            'Include/atlapp.h' (Join-Path $work '3rdParty\WTL10_10320') $sevenZip
+
+          # 构建后事件 Build-FB2KComponent.ps1 会去 ..\bin 和 ..\bin.x86 找 foobar2000.exe，
+          # 找不到就 exit，从而跳过 Compress-Archive（打包就没了）。CI 里放个占位文件即可。
+          foreach ($dir in @('bin', 'bin.x86')) {
+            $path = Join-Path $work $dir
+            New-Item -ItemType Directory -Force -Path $path | Out-Null
+            $exe = Join-Path $path 'foobar2000.exe'
+            if (-not (Test-Path $exe)) { New-Item -ItemType File -Path $exe | Out-Null }
+          }
+
+          foreach ($dir in @('out', 'int')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $work $dir) | Out-Null
+          }
+
+          Write-Host '依赖就绪：'
+          Get-ChildItem $work -Name | ForEach-Object { Write-Host "  $_" }
+
+      - name: 定位 MSBuild 与 MSVC 工具集
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path $vswhere)) { throw '未找到 vswhere.exe，runner 上没有安装 Visual Studio' }
+
+          $json = & $vswhere -products * -prerelease -utf8 `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json
+          if (-not $json) { throw '没有找到带 C++ 工具集的 Visual Studio 安装' }
+
+          $installs = @($json | ConvertFrom-Json)
+          if ($installs.Count -eq 0) { throw '没有找到带 C++ 工具集的 Visual Studio 安装' }
+
+          # 工程用 v145（VS 2026）；runner 上还没装的话退回 v143（VS 2022），代码只要求 C++20
+          $byToolset = @{}
+          foreach ($vs in $installs) {
+            foreach ($toolset in @('v145', 'v143')) {
+              $marker = Join-Path $vs.installationPath "VC\Auxiliary\Build\Microsoft.VCToolsVersion.${toolset}.default.txt"
+              if ((Test-Path $marker) -and (-not $byToolset.ContainsKey($toolset))) {
+                $byToolset[$toolset] = $vs.installationPath
+              }
+            }
+          }
+
+          $toolset = $null
+          foreach ($candidate in @('v145', 'v143')) {
+            if ($byToolset.ContainsKey($candidate)) { $toolset = $candidate; break }
+          }
+          if (-not $toolset) { throw '既没有 v145 也没有 v143 工具集' }
+
+          $vsPath = $byToolset[$toolset]
+          $msbuild = Join-Path $vsPath 'MSBuild\Current\Bin\amd64\MSBuild.exe'
+          if (-not (Test-Path $msbuild)) { $msbuild = Join-Path $vsPath 'MSBuild\Current\Bin\MSBuild.exe' }
+          if (-not (Test-Path $msbuild)) { throw "在 $vsPath 下找不到 MSBuild.exe" }
+
+          if ($toolset -ne 'v145') {
+            Write-Host "::warning::未找到 v145 工具集（VS 2026），改用 $toolset 构建"
+          }
+
+          Write-Host "Visual Studio : $vsPath"
+          Write-Host "MSBuild       : $msbuild"
+          Write-Host "工具集        : $toolset"
+
+          "MSBUILD=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "MSBUILD_TOOLSET=$toolset" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: 构建 x86 与 x64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $work = Join-Path $env:GITHUB_WORKSPACE 'src'
+          $repo = Join-Path $work 'foo_vis_spectrum_analyzer'
+          $sln  = Join-Path $repo 'foo_vis_spectrum_analyzer.sln'
+          $cfg  = $env:CONFIGURATION
+
+          if (-not $env:MSBUILD_TOOLSET) { throw 'MSBUILD_TOOLSET 为空' }
+
+          # 先 x86 再 x64：打包脚本会把两个平台的 DLL 依次塞进同一个 .fb2k-component
+          foreach ($platform in @('x86', 'x64')) {
+            # 统一 OutDir。Columns UI SDK 自带工程没有设置 OutDir（默认落到 <仓库>\Win32\Release），
+            # 而主工程按 $(SolutionDir)..\out\<平台>-<配置>\columns_ui_sdk.lib 去链接它。
+            $outDir = Join-Path $work ('out\' + $platform + '-' + $cfg)
+
+            Write-Host "==> 构建 $platform / $cfg" -ForegroundColor Cyan
+            & $env:MSBUILD $sln /nologo /m /v:minimal `
+              "/p:Configuration=$cfg" `
+              "/p:Platform=$platform" `
+              "/p:OutDir=$outDir" `
+              "/p:PlatformToolset=$env:MSBUILD_TOOLSET"
+
+            if ($LASTEXITCODE -ne 0) { throw "构建失败：$platform / $cfg（退出码 $LASTEXITCODE）" }
+          }
+
+      - name: 校验打包结果
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $work = Join-Path $env:GITHUB_WORKSPACE 'src'
+          $zip  = Join-Path $work "out\${env:PROJECT_NAME}.fb2k-component"
+
+          if (-not (Test-Path $zip)) { throw "没有生成 $zip" }
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            $entries = @($archive.Entries | ForEach-Object { $_.FullName -replace '\\', '/' })
+          } finally {
+            $archive.Dispose()
+          }
+
+          Write-Host "包内文件（$($entries.Count)）："
+          $entries | ForEach-Object { Write-Host "  $_" }
+
+          foreach ($required in @("${env:PROJECT_NAME}.dll", "x64/${env:PROJECT_NAME}.dll")) {
+            if ($entries -notcontains $required) { throw "包内缺少 $required" }
+          }
+
+          Write-Host ("大小：{0:N1} KB" -f ((Get-Item $zip).Length / 1KB))
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-${{ env.CONFIGURATION }}
+          path: |
+            src/out/${{ env.PROJECT_NAME }}.fb2k-component
+            src/out/${{ env.PROJECT_NAME }}/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 附加到 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $tag   = $env:GITHUB_REF -replace '^refs/tags/', ''
+          $asset = Join-Path $env:GITHUB_WORKSPACE "src\out\${env:PROJECT_NAME}.fb2k-component"
+
+          gh release view $tag --json tagName 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag $asset --title $tag --notes "Automated build of $tag"
+          } else {
+            gh release upload $tag $asset --clobber
+          }
+          if ($LASTEXITCODE -ne 0) { throw "上传 Release 附件失败（tag: $tag）" }

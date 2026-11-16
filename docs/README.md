@@ -1,0 +1,1359 @@
+
+# foo_vis_spectrum_analyzer User Guide
+
+Welcome to [foo_vis_spectrum_analyzer](https://github.com/stuerp/foo_vis_spectrum_analyzer/releases). This guide will help you understand how to use the component effectively and get the most out of its features.
+
+---
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Features](#features)
+3. [Context Menu](#context-menu)
+4. [Configuring](#configuring)
+5. [Troubleshooting](#troubleshooting)
+6. [FAQs](#faqs)
+7. [Reference Material](#reference-material)
+8. [History](#history)
+9. [Acknowledgements and Credits](#acknowledgements-and-credits)
+10. [Support](#support)
+
+---
+`
+## Introduction
+`
+[foo_vis_spectrum_analyzer](https://github.com/stuerp/foo_vis_spectrum_analyzer/releases) is a [foobar2000](https://www.foobar2000.org/) component.
+
+It implements a panel to visualize the track being played as a spectrum analysis, a spectrogram, Peak / RMS, Balance / Correlation, oscilloscope or bit meter.
+Several advanced parameters and settings are available to modify the analysis.
+
+Or you can just play with the graphics parameters to create a pleasing result.
+
+---
+
+### System Requirements
+
+- [foobar2000](https://www.foobar2000.org/download) v2.0 or later (32 or 64-bit). ![foobar2000](https://www.foobar2000.org/button-small.png)
+- Hardware supported rendering using Direct2D and DirectWrite
+- Tested on Microsoft Windows 10 and later.
+
+### Download foo_vis_spectrum_analyzer
+
+You can download the component from the foobar2000 [Components](https://www.foobar2000.org/components/view/foo_vis_spectrum_analyzer+%28x64%29) repository or from the GitHub [Releases](https://github.com/stuerp/foo_vis_spectrum_analyzer/releases) page.
+
+### Installation
+
+- Double-click `foo_vis_spectrum_analyzer.fbk2-component` or import `foo_vis_spectrum_analyzer.fbk2-component` using the foobar2000 Preferences dialog. Select the **File / Preferences / Components** menu item, select the **Components** page and click the **Install...** button.
+- Follow the foobar2000 instructions.
+
+> [!Tip]
+> To verify if the installation was successful open the foobar2000 Preferences using the **File / Preferences / Components** menu item and look for **Spectrum Analyzer** in the **Installed components** list.
+
+You can experiment with the component without modifying your layout by selecting **Spectrum Analyzer** from the **View / Visualizations** menu item.
+
+## Quick Start
+
+1. Add a Spectrum Analyzer panel to your layout.
+2. Right-click the panel and select **Configure** from the context menu.
+3. Choose a visualization type:
+   - Bars
+   - Curve
+   - Spectrogram
+4. Adjust colors and frequency distribution as desired.
+
+Enjoy the show.
+
+---
+
+## Features
+
+- Fast Fourier (FFT), Constant-Q (CQT), Sliding Windowed Infinite Fourier (SWIFT) and Analog-style transforms
+- Multiple frequency range and smoothing options
+- Multiple graph types
+- Styling of all visual elements
+- Artwork background and color extraction
+- Uses DirectX rendering.
+- Supports the Default User Interface (DUI) and the [Columns User Interface](https://yuo.be/columns-ui) (CUI) both in windowed and full-screen mode.
+- Supports dark mode.
+- Supports foobar2000 2.0 and later (32-bit and 64-bit version).
+
+---
+
+## Context Menu
+
+Right-click on the component window to display the context menu. The following items are available:
+
+`Configure`
+
+Opens the Configuration dialog. This component has its own configuration dialog instead of a page in the standard foobar2000 preferences dialog.
+
+`Toggle Full-Screen Mode`
+
+Toggles full-screen mode off and on.
+
+> [!Note]
+> When using the Default User Interface (DUI) the full-screen version is another instance of the component with its own configuration. When you use the Columns User Interface (CUI) the existing instance will be resized to occupy the full screen.
+
+`Frame Counter`
+
+Enables the display of a rudimentary frame counter.
+
+`Refresh Rate Limit`
+
+Allows you to select the refresh rate of the component animation.
+
+> [!Note]
+> Even though the component can redraw its visuals very fast the actual maximum refresh rate is usually determined by the refresh rate of your monitor.
+
+`Presets`
+
+Contains a list of previously saved presets. Select one from the list to activate it. A checkmark will be shown next to the most recent activated preset.
+
+`Freeze`
+
+Prevents the refresh of the component, effectively reducing CPU and GPU use to zero.
+
+---
+
+## Configuring
+
+The configuration dialog is used to change all parameters used by the component. All changes are applied immediately to the component without the need to close it.
+
+A vertical list shows the names of all the configuration **pages**. Click on the name of a page to activate it. Most settings will display a tooltip to explain their purpose.
+
+`Reset`
+
+Resets the configuration to the default values.
+
+`OK`
+
+Closes the dialog box and preserves the changes to the configuration during the current session.
+
+> [!Note]
+> The settings will only be saved to your profile when foobar2000 is closed.
+
+`Cancel`
+
+Closes the dialog box and undoes any changes to the configuration.
+
+---
+
+### Visualization page
+
+This page contains settings specific to some of the visualizations.
+
+#### Type
+
+Determines the type of visualization of a graph:
+
+##### Bars
+
+The classic frequency spectrum visualization.
+
+![Screenshot](assets/Spectrum-Analyzer-Bars.png?raw=true "Screenshot")
+
+<sup>Spectrum analyzer Bars Mode with gradient colors</sup>
+
+![Screenshot](assets/Spectrum-Analyzer-LED-Bars.png?raw=true "Screenshot")
+
+<sup>Spectrum analyzer LED Bars Mode with gradient colors</sup>
+
+##### Curve
+
+The same as bars but with a smoothed curve instead of bars.
+
+![Screenshot](assets/Spectrum-Analyzer-Curve+Peak-Meter+Level-Meter.png?raw=true "Screenshot")
+
+<sup>Spectrum analyzer Curve Mode with album art background, Peak / RMS and Balance / Correlation</sup>
+
+![Screenshot](assets/Spectrum-Analyzer-Mirrored-Curves.png?raw=true "Screenshot")
+
+<sup>Spectrum analyzer wit mirrored Curve Mode</sup>
+
+##### Spectrogram
+
+![Screenshot](assets/Spectrogram.png?raw=true "Screenshot")
+
+<sup>Horizontal scrolling spectrogram visualization</sup>
+
+##### Peak / RMS
+
+Displays the peak and RMS levels of the audio.
+
+##### Balance / Correlation
+
+Displays the balance and mid/side correlation of the audio.
+
+##### Radial Bars
+
+A variation of the Bars visualization that displays the frequency spectrum in a circle.
+
+![Screenshot](assets/Radial-Bars.png?raw=true "Screenshot")
+
+##### Radial Curve
+
+A variation of the Curve visualization that displays the frequency spectrum in a circle.
+
+![Screenshot](assets/Radial-Curve.png?raw=true "Screenshot")
+
+##### Oscilloscope
+
+Shows the shape of the audio signal over time, helping you understand how sound behaves.
+
+> [!Note]
+> The oscilloscope only displays a signal if a channel is present in the audio and if the channel has been selected for display on the *Graphs* page.
+
+###### Time-domain mode
+
+In this mode the X-axis represents the time and the Y-axis represents the amplitude of the signal.
+
+This visualization uses the following settings:
+
+- Graph X-axis and Y-axis settings
+  - Select *Off* or *None* to prevent the axis from being rendered.
+- Channel selection
+- Y signal gain
+- Phosphor effect settings
+
+![Screenshot](assets/Oscilloscope.png?raw=true "Screenshot")
+
+<sup>Oscilloscope</sup>
+
+![Screenshot](assets/Oscilloscope-dBFS.png?raw=true "Screenshot")
+
+<sup>Oscilloscope with Y-axis in dBFS</sup>
+
+###### X/Y mode
+
+In this mode the visualization displays two input signals (typically the left and right channel) plotted against each other, with one signal driving the horizontal axis (X)
+and the other the vertical axis (Y), instead of the usual time-based sweep.
+
+This mode is useful for visualizing the relationship between two signals, such as phase differences, frequency ratios, or specific patterns like Lissajous figures.
+
+This visualization uses the following settings:
+
+- Graph X-axis and Y-axis settings
+  - Select *Off* or *None* to prevent the axis from being rendered.
+- Channel pair selection: Determines which channels will be plotted against each other.
+- Swap channels to determine which channel uses the X-axis and which one uses the Y-axis. 
+- X and Y signal gain
+- Phosphor afterglow effect settings
+
+![Screenshot](assets/Oscilloscope-XY.png?raw=true "Screenshot")
+
+<sup>Oscilloscope in X/Y mode displaying a Lissajous figure</sup>
+
+##### Goniometer
+
+The goniometer is a specialized version of the oscilloscope in X/Y mode. It uses points instead of lines. The input signal can be filtered into a woofer, mid and tweeter frequency band.
+
+![Screenshot](assets/Goniometer.png?raw=true "Screenshot")
+
+##### Bit Meter
+
+The Bit Meter visualization is a specialized tool used to analyze the digital precision (bit depth) of an audio signal in real-time. It displays which bits in the digital data are being actively used.
+
+It can demonstrate if a file is, for example, 24-bit but only actually using 16 bits of information, indicating potential wasted headroom or improper recording levels.
+
+The distribution of bit usage over time is display as a histogram during playback. The X-axis shows the bit number; the Y-axis the channel name.
+
+foobar2000 uses single or double precision floating-point numbers (real numbers) between -1 and 1 to represent audio samples.
+A floating-point number is internally represented by 32 or 64 bits divided into a sign (+/-) and exponent and a mantissa (the decimal part).
+Each of these bit ranges can be rendered with a different style.
+If, while playing a track, not all of the bits of the mantissa are used that may indicate resolution loss during the encoding of the track.
+
+> [!Note]
+> This visualization only displays a signal if a channel is present in the audio and if the channel has been selected for display on the *Graphs* page.
+> It supports dedicated styles to highlight the sign, mantissa and exponent of a foobar2000 samples.
+
+![Screenshot](assets/Bit-Meter-1.png?raw=true "Screenshot")
+
+<sup>Bit Meter (Floating-Point Mode) using varying bar heights</sup>
+
+![Screenshot](assets/Bit-Meter-2.png?raw=true "Screenshot")
+
+<sup>Bit Meter (Floating-Point Mode) using varying bar opacity</sup>
+
+![Screenshot](assets/Bit-Meter-Integer-Mode.png?raw=true "Screenshot")
+
+<sup>Bit Meter (Integer Mode)</sup>
+
+#### Peak Indicators group
+
+Some visualizations can display indicators for the peak values. The following settings determine how those peak indicators are animated.
+
+Set the visualization type to **Bars**, **Peak / RMS** or **Balance / Correlation** to enable these settings.
+
+`Peak mode`
+
+Determines how the peak indicators behave:
+
+| Mode        | Description                      |
+|-------------|----------------------------------|
+| None        | Disable peak indicators          |
+| Classic     | Traditional falling peak marker  |
+| Gravity     | Physically-inspired decay        |
+| AIMP        | Emulates AIMP peak behavior      |
+| Fade Out    | Peaks gradually fade             |
+| Fading AIMP | Combination of AIMP and Fade Out |
+
+`Hold time`
+
+Specifies how long a peak value will be held steady before it starts falling (in seconds).
+
+`Fall rate`
+
+Specifies the rate at which the peak value decreases towards 0 (in dB/s).
+
+`Reset on track change`
+
+Resets the FFT peaks when a track starts or stops. This can be useful combined with fall rate of 0 dB/s to view the peaks of a complete track.
+
+#### LEDs group
+
+Some visualizations can display a bar as simulated LED lights.
+
+Set the visualization type to **Bars**, **Peak / RMS** or **Balance / Correlation** to enable these settings.
+
+`Enabled`
+
+Display the spectrum bars, Peak / RMS and Balance / Correlation as LEDs.
+
+`LED light`
+
+The size of the LED light, in pixels.
+
+`LED gap`
+
+The size of the gap between the LEDs, in pixels.
+
+`Integral size`
+
+Enable this setting to render the LEDs only as full blocks.
+
+#### Radial Bars / Radial Curve group
+
+Set the visualization type to **Radial Bars** or  **Radial Curve** to enable these settings.
+
+`Inner radius`
+
+Sets the inner radius as a percentage of the smallest side of the graph.
+
+`Outer radius`
+
+Sets the outer radius as a percentage of the smallest side of the graph.
+
+> [!Note]
+> If the inner radius is greater than the outer radius the bars are drawn inwards.
+
+`Angular velocity`
+
+Sets the angular velocity of the rotation in degrees per second. Use positive values for clockwise rotation; negative values for anti-clockwise rotation.
+
+#### Bit Meter group
+
+Set the visualization type to **Bit Meter** to enable these settings.
+
+`Mode`
+
+Determines if the bit meter displays the bits of a floating-point sample or an integer sample.
+
+`Bits per integer`
+
+Sets the number of bits an integer sample will use in *Integer* mode.
+
+`Opacity Mode`
+
+Renders the bit histogram by varying the opacity of the bars instead of the height.
+
+#### Spectrogram group
+
+Set the visualization type to **Spectrogram** to enable these settings.
+
+`Scrolling`
+
+Activates scrolling of the spectrogram.
+
+`Horizontal`
+
+Renders the spectrogram horizontally when enabled, vertically when not.
+
+`Use spectrum bar metrics`
+
+Some users create a *waterfall* effect by positioning the spectrogram under a spectrum visualization. This option tells the spectrogram to use the same spacing calculations so that the spectrum and spectrogram align.
+
+`Legend`
+
+Renders a color legend in the visualization area that tells which color correspondents to a power level.
+
+#### Peak / RMS group
+
+The Peak / RMS will display the instant peak and RMS over time level of the playing track.
+
+> [!Tip]
+> A bar will be shown for each of the channels in the playing track but only when it is also selected in the Channels list on the Graphs page. F.e. a 7.1 track with only the Front Left and Front Right channel selected will only show 2 bars. A mono track without the Front Center channel selected will show no bar.
+
+Set the visualization type to **Peak / RMS** to enable these settings.
+
+`Horizontal`
+
+Renders the Peak / RMS horizontally when enabled, vertically when not.
+
+`RMS+3`
+
+Adds 3dB to the RMS value.
+
+`Center scale`
+
+Adds a scale between each bar.
+
+`Scale lines`
+
+Draws a scale line on the bar area when enabled.
+
+> [!Tip]
+> When using LED mode the scale lines can appear in the gap between the LEDs causing an inconsitent look. Disable this option to stop drawing the lines.
+
+`RMS window`
+
+Specifies the duration of each RMS measurement in seconds.
+
+`Bar gap`
+
+Specifies the gap between the bar (in pixels). Defaults to 1 pixel.
+
+`Max. bar size`
+
+Allows you to constrain the width or height of a bar when the graph is resized. Specify a size in pixels to constrain the bar width or height. Set to 0 to remove the constraint.
+
+#### Balance / Correlation group
+
+Set the visualization type to **Balance / Correlation** to enable these settings.
+
+`Horizontal`
+
+Renders the Balance / Correlation horizontally when enabled, vertically when not.
+
+#### Oscilloscope / Goniometer group
+
+`X/Y mode`
+
+Enables X/Y-mode. Select a channel pair, typically Left/Right. The Left signal will be plotted on the X-axis; the Right signal will be plotted on the Y-axis.
+
+`X input gain`
+
+Specifies the input gain applied to the X signal.
+
+`Y input gain`
+
+Specifies the input gain applied to the Y signal.
+
+`Rotation`
+
+Specifies the rotation angle in degrees of the signal when displayed by an X/Y oscilloscope. Valid range is -180 to +180 degrees.
+
+`Frame count`
+
+Specifies the number of audio frames that will be used by the oscilloscope per screen update.
+
+`Phosphor decay`
+
+Enables a phosphor afterglow effect simulation of analog oscilloscopes.
+
+`Blur sigma`
+
+Specifies the number of pixels for the Gaussian blur. Higher values increase the blurring.
+
+`Afterglow`
+
+Specifies the afterglow of the dispay in ms. Use lower values for a shorter afterglow. Use values between 80 and 150 ms to imitate the afterglow of an analog oscilloscope.
+
+`Downmix to mono`
+
+When enabled the input signals to the oscilloscope will be downmix to a mono signal.
+
+`Zero-crossing trigger`
+
+Enables a zero trigger to synchronize the oscilloscope display to the signal's zero crossings, creating a stable and readable waveform display.
+
+`Goniometer meter`
+
+Determines the mode of the goniometer.
+
+- `Mono` uses one color for all signal samples.
+- `RGB` uses the band power of an signal to generate a color for the sample: low band power for the red channel, mid band power for the green channel and high band power for the blue channel.
+- `Triband` uses the band power to determine the color of the signal sample. The `Signal` style should be set to a gradient Color Source. The colors of the gradient will be used to select the color.
+
+`Visual Gain (dB)`
+
+These settings allows you to specify a gain in decibel (dB) to the low, mid and high frequencies of the input signal.
+
+Refer to the [Crossover Filters](#crossover-filter-group) on the [Filters](#filters-page) page to specify the cutoff frequencies for the bands.
+
+---
+
+### Transform page
+
+This page contains the controls to configure the Time to Frequency domain transform that the component will use to visualize the frequencies.
+
+#### FFT vs. CQT
+
+Both FFT (Fast Fourier Transform) and CQT (Constant-Q Transform) convert audio from the time domain into the frequency domain, but they distribute frequency bins very differently.
+
+**FFT** divides the frequency range into equal-width frequency bins e.g. 20Hz, 40Hz, 60Hz, 80Hz, 100Hz ...
+The size of the frequency bins remains constant.
+
+##### Advantages
+
+- Fast and efficient
+- Excellent frequency accuracy at high frequencies
+- Industry standard for spectrum analyzers
+- Low CPU usage
+
+##### Disadvantages
+
+- Frequency resolution in the lower frequencies is limited.
+- Musical notes do not align naturally with bins.
+- Bass frequencies can appear compressed together.
+
+##### Recommended for most users
+
+- Traditional spectrum analyzers
+- Technical measurements
+- Real-time visualizations
+- General-purpose audio analysis
+
+**CQT** divides frequencies logarithmically, similar to musical pitch perception e.g. 20Hz, 40Hz, 80Hz, 160Hz, 320Hz, 640Hz ...
+The size of the frequency bins becomes larger as the frequency increases.
+
+Human hearing is approximately logarithmic. Each octave step doubles the frequency, but we perceive each doubling as the same musical distance.
+
+CQT looks better for music because:
+
+- it gives bass notes more detail.
+- Octaves are distributed evenly.
+- Harmonics form clearer patterns
+- Musical instruments appear more recognizable.
+
+##### Advantages
+
+- Higher resolution at low frequencies
+- Matches musical note spacing
+- More natural-looking audio visualizations
+- Better for harmonic and musical content
+
+##### Disadvantages
+
+- More computationally expensive
+- Lower precision at very high frequencies
+- More complex to configure
+
+#### Other methods
+
+- Sliding Windowed Infinite Fourier (SWIFT)
+- Analog-style
+
+#### Transform group
+
+`Method`
+
+Allows you to select the Time to Frequency domain transform. The following transforms are implemented:
+
+`Window function`
+
+Selects the window function that will be applied to the samples (Time domain).
+
+| Name | Description |
+| --- | --- |
+| Box Car | Bin-centered tones. Sharpest time edges, highest sidelobes (~13 dB). Use when you need perfect time localization and don’t care about leakage. (Rectangular, Dirichlet) |
+| Hann | General FFT and STFT work. Sidelobes ~31 dB, good compromise. Use with speech, audio, general-purpose. (Hanning, cosine squared, raised cosine) |
+| Hamming | Lower first sidelobe than Hann, but unlike Hann its endpoints do not reach zero. Suitable when reduced spectral leakage is preferred over exact endpoint continuity. (Raised cosine) |
+| Blackman | High-dynamic-range measurements. Provides stronger sidelobe suppression (~58 dB) than Hann and Hamming at the cost of a wider main lobe. Use when a high dynamic range is needed. |
+| Nuttall | Provides strong sidelobe suppression at the cost of a wider main lobe. |
+| Flat Top | Tone-level measurement. Provides high amplitude accuracy and low scalloping loss at the cost of a significantly wider main lobe. |
+| Bartlett | Basic leakage reduction. Reaches its maximum at the center and decreases linearly to zero at both endpoints. (Triangular) |
+| Parzen | Suppressing distant leakage. Useful for detecting weak frequency components near stronger ones. |
+| Welch | Smooth, parabolic taper. Useful for general spectral analysis. |
+| Power-Of-Sine | The power controls the shape of the window. A power of 1 produces a sine window, while a power of 2 produces a Hann window. |
+| Power-Of-Circle | The power controls the curvature of the window. A power of 1 produces the standard Welch window. |
+| Gaussian | No sidelobes at all (theoretically), but infinite support. Use when you can afford a longer window. |
+| Tukey | Alpha controls the proportion of the window occupied by the cosine tapers. An alpha of 0 produces a BoxCar window, while an alpha of 1 produces a Hann window. (Tapered cosine) |
+| Kaiser | Beta controls the shape of the window. A beta of zero produces a BoxCar window, while larger values increase sidelobe suppression at the cost of a wider main lobe. |
+| Poisson | Exponential, Decaying transients, impulse responses, reverberation, and modal analysis. |
+| Hyperbolic Secant | Beta controls the concentration of the window. A beta of zero produces a BoxCar window, while larger values increase attenuation toward the endpoints. |
+| Quadratic Spline | General spectral analysis, Smooth polynomial taper and faster distant roll-off. (Quadratic B-spline window) |
+| Ogg Vorbis | Supports transitions between short and long blocks. Helps control leakage and transient coding artifacts. |
+| Cascaded Sine | Sine taper. |
+| Galss | [Discussion](https://hydrogenaud.io/index.php/topic,125031.msg1036200.html#msg1036200) |
+| Lanczos | Smooth taper. Balanced resolution and leakage. Only moderate sidelobe suppression. |
+| 4-term Blackman-Harris | Produces very clean peaks with minimal leakage from strong tones into neighboring bins. w(x) = a0​ + a1 ​cos(πt) + a2 ​cos(2πt) + a3​ cos(3πt) |
+
+`Window parameter`
+
+Allows you to tweak window functions that support a parameter like Gaussian and Kaiser.
+
+`Window skew`
+
+Adjusts how the window function reacts to samples. Positive values makes it skew towards latest samples while negative values skews towards earliest samples. Defaults to 0 (None).
+
+`Reaction alignment`
+
+Controls the delay between the actual playback and the visualization.
+
+- Less than zero: All samples are ahead of the playback sample with the first sample equal to the actual playback sample.
+- Zero: The first half of samples are behind the current playback sample and the second half are ahead of it.
+- Greater than zero: All samples are behind the playback with the last sample equal to the current playback sample.
+
+#### Fourier Transform group
+
+Groups the parameters that influence the Fast Fourier transform.
+
+`No. of bins`
+
+Specifies the number of bins used by the transforms as a number between 64 and 32768.
+
+- Select ''Custom'' to specify a number that is not a power of 2. This will consume a lot more CPU power.
+- Select ''Sample rate based'' to specify the size as a duration. F.e. 100ms of a track sampled at 44.1kHz will result in an FFT window of 4410 samples.
+
+`Coefficient aggregation`
+
+Determines which method is used to aggregate the coefficients of the FFT into frequency bins.
+
+- Minimum
+- Maximum
+- Sum
+- Residual Mean Square (RMS)
+- RMS Sum
+- Average
+- Median
+
+`Mapping`
+
+Determines how the FFT power coefficients are mapped to the frequency bins.
+
+- Standard
+- Triangular Filter Bank
+- Brown-Puckette CQT
+
+> [!Note]
+> The `Triangular Filter Bank` mapping always uses frequencies generated from the [Mel scale](https://en.wikipedia.org/wiki/Mel_scale).
+
+`Smooth lower frequencies`
+
+When enabled, the band power part only gets used when number of FFT bins to sum for each band is at least two or more.
+
+`Smooth gain transition`
+
+Smooths the frequency slope of the aggregation modes.
+
+`Lanczos kernel`
+
+Determines the size of the Lanczos kernel. The kernel is used to create a smooth transition between the FFT coefficients resulting in a visual pleasing result.
+
+#### Brown-Puckette CQT Mapping group
+
+The settings in this group become available when you select Brown-Puckette CQT for coefficient mapping.
+
+`Bandwidth offset`
+
+Offsets the bandwidth of the Brown-Puckette CQT.
+
+`Bandwidth cap`
+
+Minimum Brown-Puckette CQT kernel size.
+
+`Bandwidth amount`
+
+The Brown-Puckette CQT kernel size.
+
+`Granular bandwidth`
+
+When disabled constrains the bandwidth to powers of 2.
+
+`Kernel shape`
+
+Determines the shape of the Brown-Puckette CQT kernel.
+
+`Kernel shape parameter`
+
+Parameter used by certain window functions like Gaussian and Kaiser windows.
+
+`Kernel asymmetry`
+
+Adjusts how the window function reacts to samples. Positive values makes it skew towards latest samples while negative values skews towards earliest samples.
+
+#### Infinite Impulse Response (IIR) group
+
+The settings in this group become available when you select the SWIFT or the Analog-style transforms.
+
+`Filter bank order`
+
+Determines the order of the filter bank used to calculate the SWIFT and Analog-style transforms.
+
+`Time resolution`
+
+Determines the maximum time resolution used by the SWIFT and Analog-style transforms.
+
+`Bandwidth`
+
+Determines the bandwidth used by the SWIFT and Analog-style transforms.
+
+`Constant-Q`
+
+Uses constant-Q instead of variable-Q in the IIR transforms.
+
+`Compensate bandwidth`
+
+Compensate bandwidth for narrowing on higher order IIR filters banks.
+
+`Use prewarped Q`
+
+Prewarps Q to ensure the actual bandwidth is truly logarithmic at anything closer to the Nyquist frequency.
+
+---
+
+### Frequencies page
+
+This page allows you to specify the frequency range you would like to visualize.
+
+#### Frequencies group
+
+Groups the parameters that determine the frequency range that will be displayed.
+
+`Distribution`
+
+Determines which parameters are used to generate the frequency bands.
+
+- Linear: Generate frequency bands based on the frequency parameters.
+- Octaves: Generate frequency bands based on the note parameters.
+- AveePlayer: Generate frequency bands used by AveePlayer.
+- Mel: Generate frequency bands using the Mel scale.
+
+`No. of bands`
+
+Specifies the number of frequency bands to generate (2 to 8192) in the specified frequency range.
+
+`No. of Mel bands`
+
+Specifies the number of mel bands to generate (24 to 128) in the specified frequency range.
+
+`Frequency range`
+
+Frequency of the first and last band, 1Hz to 96000Hz. Each frequency is centered in the band.
+
+`Note range`
+
+Available when selecting the ''Octaves'' distribution. Select a range between the C note of octave 0 and B# of octave 11 resulting in maximum 144 notes or 12 octaves.
+
+`Bands per octave`
+
+Number of bands per octave ranging from 1 to 48.
+
+`Tuning pitch`
+
+Frequency of the tuning pitch (A4 = 440.0Hz). Valid values are 1Hz to 96000Hz.
+
+`Transpose`
+
+Determines how many semitones the frequencies will be transposed. Valid values are -24 to 24.
+
+`Scaling`
+
+Determines which algorithm will be used to scale the frequencies:
+
+- Linear
+- Logarithmic
+- Shifted logarithmic
+- [Mel](https://en.wikipedia.org/wiki/Mel_scale)
+- Bark
+- Adjustable Bark
+- ERB
+- Cams
+- Hyperbolic Sine
+- n-th Root
+- Negative exponential
+- Period
+
+`Skew factor`
+
+Affects any adjustable frequency scaling functions like hyperbolic sine and n-th root. Higher values mean a more linear spectrum.
+
+`Bandwidth`
+
+Distance between the low and high frequency boundaries for each frequency band. Valid values are 0 to 64.
+
+---
+
+### Filters page
+
+#### Acoustic Filters group
+
+This group contains settings to allow you to apply acoustic weighting filters (A-, B-, C-, D- and M-weighting (ITU-R 468)) to the frequencies.
+
+`Weighting type`
+
+Selects the weighting filter type that will be applied.
+
+##### Frequency Tilt
+
+`Frequency shift`
+
+Horizontally shifts the complete weighting curve. The value is expressed in spectrum-bin units and is converted to Hz using the current sample rate and bin count.
+
+Positive values shift the weighting curve toward lower displayed frequencies by evaluating each band at a higher effective frequency. Negative values evaluate each band at a lower effective frequency.
+
+A value of 0 disables the frequency shift.
+
+`Frequency tilt`
+
+Sets the frequency tilt in approximately decibels per octave.
+
+Positive values progressively amplify higher frequencies and attenuate lower frequencies relative to the slope reference frequency. Negative values amplify lower frequencies and attenuate higher frequencies.
+
+A value of 0 dB/octave disables the tilt.
+
+`Frequency tilt pivot`
+
+Sets the frequency, in Hz, at which the tilt adjustment is 0 dB. Frequencies above and below this reference are adjusted according to the configured tilt.
+
+##### Equalization
+
+`Equalization amount`
+
+Controls the strength of the custom equalization curve.
+
+Zero disables equalization. Positive values progressively increase the effect of the curve. This parameter is an intensity control and does not directly represent decibels.
+
+`Equalization frequency scale`
+
+Controls the frequency scale of the custom equalization curve.
+
+Higher values move the curve’s frequency-dependent features toward higher frequencies; lower values move them toward lower frequencies.
+
+`Equalization depth`
+
+Controls the scale and shape of the custom equalization curve.
+
+Increasing or decreasing this value changes both the curve’s frequency progression and gain profile. It is not equivalent to a conventional equalizer bandwidth or Q control.
+
+`Weighting amount`
+
+Controls how strongly the selected A, B, C, D, or M acoustic weighting curve is applied. Zero disables acoustic weighting, 0.5 applies half the normal dB response, and 1.0 applies the full response. Values greater than one exaggerate the curve, while negative values invert it.
+
+#### Crossover Filter group
+
+This group contains settings to modify the triband crossover filter of the goniometer.
+
+The bands are configured as follows:
+
+- Low band: 0Hz - `Low Band Setting`
+- Mid band: `Low band Setting` - `High band setting`
+- High band: `High band setting` - Nyquist frequency
+
+`Low band`
+
+Specifies the end of the low frequency band of the crossover filter in Hz.
+
+`High band`
+
+Specifies the start of the high frequency band of the crossover filter in Hz.
+
+---
+
+### Common page
+
+This page contains settings that the visualizations have in common.
+
+#### Common group
+
+`Smoothing method`
+
+Determines how the spectrum coefficients and the Peak / RMS values are smoothed.
+
+- Average: Calculates a weighted average between the old and the new value of the peak. Uses the smoothing factor as a weight.
+- Peak: Retains the maximum between the old and the new value of the peak.
+
+`Smoothing factor`
+
+Specifies the strength of the smoothing (0 to 1)
+
+`Tooltips`
+
+Enable the check box to see a tooltip with the center frequency and when appropriate, the name of the note, or the frequency band.
+
+> [!Note]
+> When this option is disabled you can get tooltips by pressing and holding the left mousebutton on the graph.
+
+`Suppress mirror image`
+
+Prevents the mirror image of the spectrum (anything above the Nyquist frequency) from being rendered.
+
+`Visualize during pause`
+
+Enable this option to continue visualization when playback is paused.
+
+#### Artwork group
+
+Some visualizations can use artwork to display on the background or to use as a source for a color list. The artwork can come from the playing track or from file location.
+
+> [!Note]
+> The color selection runs only when a new track is started.
+
+`Artwork type`
+
+Determines which artwork will be displayed on the graph background or will be used to extract colors from.
+
+`No. artwork colors`
+
+The maximum number of colors to select from the artwork.
+
+`Lightness threshold`
+
+Determines when a color is considered light. Expressed as a percentage of whiteness, white being 100%.
+
+`Sort colors by`
+
+Determines how to sort the colors selected from the artwork.
+
+- `None` will start the color list with the color that is used the most in the artwork followed by lesser used colors.
+- `Increasing hue` and `Decreasing hue` sort by hue.
+- `Increasing lightness` and `Decreasing lightness` sort by lightness.
+- `Increasing saturation` and `Decreasing saturation` sort by saturation.
+- `Dark to light` and `Light to dark` use the perceived lumaninance of color to sort from dark to light and vice versa.
+
+`Show artwork on background`
+
+Displays artwork on the graph background. By default the front cover of the playing track is used. You can override this behavior using the `Artwork type` or `Artwork file path` setting.
+
+`Fit mode`
+
+Determines how over- and undersized artwork is scaled before rendering.
+
+| Name | Description |
+| --- | --- |
+| Free | The artwork will not be scaled. |
+| Fit largest | The largest side of the artwork is made to fit the available area. The other side will be scaled proportionally. |
+| Fit width | The width of the artwork is made to fit the available area. The other side will be scaled proportionally. |
+| Fit height | The height side of the artwork is made to fit the available area. The other side will be scaled proportionally. |
+| Fit smallest | The smallest side of the artwork is made to fit the available area. The other side will be scaled proportionally. |
+| Cover | The artwork scales to completely fill the area, maintaining its original aspect ratio. If the artwork's aspect ratio doesn't match the area, it will be cropped. |
+
+`Allow upscaling`
+
+Enable to upscale smaller artwork while respecting the selected `Fit mode` except `Free`.
+
+`Fit window`
+
+Enable to use the full component window as available area instead of the client area (the window minus any room taken by axes)
+
+`Artwork opacity`
+
+Determines the opacity of the artwork when displayed.
+
+`Artwork blur radius`
+
+Specifies the number of pixels used for the Gaussian blur radius. A higher value increases the blurring. Setting the number of pixels to 0 (default) disables the blurring.
+
+`Artwork file path`
+
+A fully-qualified file path or a foobar2000 script that returns the file path of an image to display on the graph background.
+
+#### Component
+
+`Log Level`
+
+Allows you to control the messages the component will write to the foobar2000 console.
+
+> [!Warning]
+> The **Debug** and **Trace** levels may generate a lot of technical output.
+
+---
+
+### Graphs page
+
+The component window can contain more than one graph at the same time. Some users use this to create facing spectrum analyses. Graphs can have individual settings but share the visualization type and the styles.
+
+`Graph list`
+
+The graph list shows all graphs in the current window. Use the + button to add a graph. Use the - button to remove the selected graph.
+
+`Vertical layout`
+
+Enable this setting to stack the graphs vertically instead of horizontally.
+
+`Overlap graphs`
+
+Select to draw the graphs overlapped instead of stacked horizontally or vertically.
+
+> [!Note]
+> Only supported by the bar, curve, radial bar and radial curve visualization.
+
+`Use local styles`
+
+Enable this setting to use local styles. A local style is tied to a graph. Each grah can have its own local style.
+
+`Description`
+
+Allow you to edit the description of the selected graph.
+
+#### Layout group
+
+`Horizontal alignment`
+
+Determines the horizontal alignment of a graph within its bounds (taking into account any space used by the left and/or right axis).
+
+- *Near* aligns the visualization with the near side of the graph (aka the *left* edge when using normal orientation).
+- *Center* centers the visualization in the graph area.
+- *Far* aligns the visualization with the far side of the graph (aka the *right* edge when using normal orientation).
+- *Fit* makes the visualization use the full horizontal the graph area.
+
+`Flip horizontally`
+
+Flips the current graph horizontally. Any axes will be rendered accordingly.
+
+`Flip vertically`
+
+Flips the current graph vertically. Any axes will be rendered accordingly.
+
+#### Axes group
+
+This group of settings determines which axes to show. Depending on the visualization the axes can have a different meaning.
+
+`Left`
+
+Displays an axis on the left of the graph.
+
+`Right`
+
+Displays an axis on the bottom of the graph.
+
+`Top`
+
+Displays an axis on top of the graph.
+
+`Bottom`
+
+Displays an axis at the bottom of the graph.
+
+#### Frequency axis group
+
+Groups the parameters that determine the way the frequency axis is displayed.
+
+`Mode`
+
+Determines which frequency axis to display.
+
+- None: Hides the X-axis (reserve no screen area for it).
+- Bands: Center frequency of a band, every 10 bands.
+- Decades: Fixed frequency range
+- Octaves: Frequency of the C note of each octave
+- Notes: C note of each octave
+
+`Decimals`
+
+Determines the number of decimals to show in the axis labels. Valid values are 0 to 3.
+
+#### Amplitude axis group
+
+Groups the parameters that determine the way the amplitude axis is displayed.
+
+`Mode`
+
+Determines which amplitude axis to display.
+
+- None: Hides the axis (reserve no screen area for it).
+- Decibel: Uses decibel values to render the scale.
+- Linear/n-th root: Uses logarithmic values to render the scale.
+
+`Amplitude range`
+
+Determines the minimum and maximum amplitude, expressed in decibel (dB), to display.
+
+`Amplitude step`
+
+Determine the step size between the min. and max. amplitude.
+
+`Use absolute`
+
+Sets the min. amplitude to -∞ dB (0 on the linear scale) when enabled.
+
+`Gamma`
+
+Sets index n of the n-th root calculation.
+
+#### Channels group
+
+`Channels`
+
+Allows you to select the audio channels that will be used to participate in the analysis of an audio frame.
+
+> [!Tip]
+> Most users will enable only the **Left** and the **Right** channel. Therefor no information will be shown in the graph when a mono track is played. Also enable the **Front Center** channel to remedy this situation.
+
+`All`
+
+Selects all channels in the `Channels` list.
+
+`None`
+
+Deselects all channels in the `Channels` list.
+
+`Up` / `Down`
+
+Moves the highlighted channel up or down in the list.
+
+The Peak Meter, Bit Meter and Oscilloscope visualization use the configured channel order to generate their output.
+
+`Channel pair`
+
+Allows you to select the pair of channels that will be used to render a visualisation. Used by the [Peak / RMS](#peak--rms-group) and the [Oscilloscope](#oscilloscope).
+
+`Swap channels`
+
+Enable to swap the interpretation of a channel pair by visualisations that support it e.g. the [Oscilloscope](#oscilloscope) in X/Y mode.
+
+---
+
+### Styles page
+
+Most of the elements of a graph can be styled. The styles list shows all available styles. Each style has a number of settings that determine how the element is rendered.
+
+`Scope`
+
+Styles are available in the global scope and local to each graph. Graph-local style override their definition in the global scope.
+
+Some styles behave differently when selecting the `Overlap graphs` options. F.e. when overlapping graphs the global graph styles are used.
+
+`Color source`
+
+The color source determines where the element gets its color information from.
+
+- None: Prevents the element from being rendered.
+- Solid: A single color is used to render the element.
+- Dominant color: The dominant color in the artwork is used to render the element. The artwork does not have to be rendered on the background.
+- Gradient: The element is rendered using a gradient created from the color list below.
+- Windows: The element is rendered using a standard Windows color.
+- User Interface: The element is rendered using a standard DUI or CUI user interface color.
+
+`Color index`
+
+Allow you to select a color when color source Window or User Interface is specified.
+
+`Color`
+
+Displays the current color used by color source Solid or Dominant Color. Click to modify the color.
+
+> [!Tip]
+> A standard Windows color dialog that has been extended with controls to modify the alpha channel of the color will pop up.
+
+`Color scheme`
+
+Specifies the color scheme used to render the element. Most color schemes are built-in and static but can be modified.
+
+| Name | Description |
+| --- | --- |
+| Solid color | A single color, effectively the same as color source `Solid` |
+| Custom | A custom list of colors. The colors in the list can have their own Color Source and Color Index. |
+| Artwork | A list of colors determined by the current artwork. Use the `Artwork` settings on the `Common` page to specify the order of the colors. |
+| Prism 1 | |
+| Prism 2 | |
+| Prism 3 | |
+| foobar2000 | The same colors as the built-in foobar2000 spectrum analyzer. |
+| foobar2000 Dark Mode | The same colors as the built-in foobar2000 spectrum analyzer in Dark Mode. |
+| Fire | |
+| Rainbow | |
+| SoX | A list of colors emulating the spectrogram colors used by [SoX](https://sourceforge.net/projects/sox/) |
+| Turbo | Color my by [Anton Mikhailov](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) |
+| Viridis | [Matplotlib](https://matplotlib.org/) [Perceptually Uniform Sequential](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) color maps |
+| Plasma | [Matplotlib](https://matplotlib.org/) [Perceptually Uniform Sequential](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) color maps |
+| Inferno | [Matplotlib](https://matplotlib.org/) [Perceptually Uniform Sequential](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) color maps |
+| Magma | [Matplotlib](https://matplotlib.org/) [Perceptually Uniform Sequential](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) color maps |
+| Cividis | [Matplotlib](https://matplotlib.org/) [Perceptually Uniform Sequential](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) color maps |
+| Gold | |
+| Triband | Designed to be used by the [goniometer](#oscilloscope-group) visualization |
+
+`Color list`
+
+Double-click a color to modify it. Modifying a color of a built-in color scheme automatically selects the Custom color scheme.
+
+Press the ''Add'' button to add a color, ''Remove'' to remove a color, ''Reverse'' to reverse the color list.
+
+The position of the color in the gradient is expressed as a percentage of the length of the gradient. E.g. a position of 50% puts the color in the middle of the gradient.
+
+Press the ''Spread'' button to evenly spread the colors in the list over the gradient. This updates the position of the colors as required.
+
+        { IDC_GRADIENT_COLOR_SOURCE, "Determines the source of the selected gradient stop color." },
+        { IDC_GRADIENT_COLOR_INDEX, "Selects the specific Windows, DUI or CUI color to use for the selected gradient stop color." },
+
+`Horizontal gradient`
+
+Generates a horizontal instead of a vertical gradient.
+
+`Amplitude-based`
+
+Some styles can use the amplitude of a spectrum frequency to determine the color. This option can only be applied to a horizontal gradient.
+
+`Opacity`
+
+Specifies the opacity of the rendered element.
+
+`Thickness`
+
+For some styles you can specify the thickness of the brush used to render the element.
+
+`Font name`
+
+Specifies the name of the font used to render the element.
+
+`Font size`
+
+Specifies the size in points of the font used to render the element.
+
+---
+
+### Presets page
+
+The whole configuration can be saved to a preset. A preset can be reloaded at any time.
+
+> [!Note]
+> Presets are not interchangeable with x86 and x64 versions of foobar2000. Special care has been taken to be as backwards compatible with preset files saved by older versions of the component.
+
+You can recognize preset files by the `fvsa` file extension.
+
+`Location`
+
+Contains the path name of the location of your preset files. By default the foobar2000 profile directory is used.
+
+> [!Note]
+> For privacy reasons the location is stored in your foobar2000 settings but will not be included in a preset file. Preset files contain no personal information and can be safely exchanged with other users.
+
+> [!Tip]
+> You can use a foobar2000 script to specify the location. In addition the following variables are supported: `%fb2k_path%`, `%fb2k_component_path%` and `%fb2k_profile_path%`.
+
+Below the location you find the preset files currently found in the specified location.
+
+Double click a preset to activate it or select it and press the Load button.
+
+`Name`
+
+Specifies the name of the preset.
+
+`Load`
+
+Loads and activates the currently selected preset.
+
+`Save`
+
+Saves the current configuration.
+
+`Delete`
+
+Deletes the currently selected preset.
+
+---
+
+## Troubleshooting
+
+🔧 *Work in Progress*
+
+---
+
+## FAQs
+
+**Q:** Why does the fullscreen version of the component not respect my settings when using DUI?
+
+**A:** In DUI the fullscreen version of the component is a completely new instance with its own settings. You have to configure it separately.
+
+**Q:** What do the letters of the channel names mean?
+
+**A:**
+
+|Abbr|Description          |
+|----|---------------------|
+|FL  |Front Left           |
+|FR  |Front Right          |
+|FC  |Front Center         |
+|LFE |Low-Frequency Effects|
+|BL  |Back Left            |
+|BR  |Back Right           |
+|FCL |Front Center Left    |
+|FCR |Front Center Right   |
+|BC  |Back Center          |
+|SL  |Side Left            |
+|SR  |Side Right           |
+|TC  |Top Center           |
+|TFL |Top Front Left       |
+|TFC |Top Front Center     |
+|TFR |Top Front Right      |
+|TBL |Top Back Left        |
+|TBC |Top Back Center      |
+|TBR |Top Back Right       |
+
+---
+
+## Reference Material
+
+This chapter contains some reference material I consulted during the development of foo_vis_spectrum_analyzer.
+
+### foobar2000
+
+- [foobar2000 Development](https://wiki.hydrogenaud.io/index.php?title=Foobar2000:Development:Overview)
+
+### Windows User Interface
+
+- [Desktop App User Interface](https://learn.microsoft.com/en-us/windows/win32/windows-application-ui-development)
+- [Windows User Experience Interaction Guidelines](https://learn.microsoft.com/en-us/windows/win32/uxguide/guidelines)
+- [Windows Controls](https://learn.microsoft.com/en-us/windows/win32/controls/window-controls)
+- [Control Library](https://learn.microsoft.com/en-us/windows/win32/controls/individual-control-info)
+- [Resource-Definition Statements](https://learn.microsoft.com/en-us/windows/win32/menurc/resource-definition-statements)
+- [Visuals, Layout](https://learn.microsoft.com/en-us/windows/win32/uxguide/vis-layout)
+
+## Transforms
+
+- [The Audio Frequency Spectrum Explained](https://www.headphonesty.com/2020/02/audio-frequency-spectrum-explained)
+- [Fast Fourier Transformation FFT - Basics](https://www.nti-audio.com/en/support/know-how/fast-fourier-transform-fft)
+- [Sine Tone Generator](https://www.audiocheck.net/audiofrequencysignalgenerator_sinetone.php)
+- [A440](https://en.wikipedia.org/wiki/A440_(pitch_standard))
+- [Constant-Q transform](https://en.wikipedia.org/wiki/Constant-Q_transform)
+- [Mel-frequency cepstrum](https://en.wikipedia.org/wiki/Mel-frequency_cepstrum)
+- [Mel scale](https://en.wikipedia.org/wiki/Mel_scale)
+- [Sliding windowed infinite Fourier transform](https://en.wikipedia.org/wiki/Sliding_DFT)
+
+## Test Material
+
+- [The SOS Audio Test Files](https://www.soundonsound.com/techniques/sos-audio-test-files)
+- [HTML5 AAC Audio Playback Tests - Multichannel](https://www2.iis.fraunhofer.de/AAC/multichannel.html)
+
+---
+
+## History
+
+The history of foo_vis_spectrum_analyzer development is available in a separate [document](History.md).
+
+---
+
+## Acknowledgements and Credits
+
+- Peter Pawlowski for the [foobar2000](https://www.foobar2000.org/) audio player. ![foobar2000](https://www.foobar2000.org/button-small.png)
+- [TF3RDL](https://codepen.io/TF3RDL/pens/) for the advice, the help and his:
+  - [Frequency bands spectrum analyzer using either FFT or CQT](https://codepen.io/TF3RDL/pen/poQJwRW)
+  - [SWIFT, Sliding Windowed Infinite Fourier Transform](https://codepen.io/TF3RDL/pen/JjBzjeY)
+  - [Analog-style spectrum analyzer and sliding DFT visualization using AudioWorklet](https://codepen.io/TF3RDL/pen/MWLzPoO)
+- [Project Nayuki](https://www.nayuki.io/page/free-small-fft-in-multiple-languages)
+- [Holger Stenger](https://github.com/stengerh) for [foo_vis_oscilloscope](https://github.com/stengerh/foo_vis_oscilloscope_d2d).
+- fismineur for [foo_musical_spectrum](https://wiki.hydrogenaud.io/index.php?title=Foobar2000:Components/Musical_Spectrum_(foo_musical_spectrum)) that inspired this component.
+- Oleg V. Polikarpotchkin and Peter Lee for their [Bezier Spline](https://www.codeproject.com/Articles/31859/Draw-a-Smooth-Curve-through-a-Set-of-2D-Points-wit) article.
+- [Bedapisl](https://github.com/bedapisl) for [Fast ColorThief](https://github.com/bedapisl/fast-colorthief).
+- [Niels Lohmann](https://github.com/nlohmann) for [JSON for Modern C++](https://github.com/nlohmann/json).
+- Anton Mikhailov for the [Turbo](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) color map.
+- [Matplotlib](https://matplotlib.org/) for the [Perceptually Uniform Sequential](https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/) color maps.
+
+---
+
+## Support
+
+For further assistance:
+
+🌐 Home page: [https://github.com/stuerp/foo_vis_spectrum_analyzer](https://github.com/stuerp/foo_vis_spectrum_analyzer)  
+🌐 Issue tracker: [https://github.com/stuerp/foo_vis_spectrum_analyzer/issues](https://github.com/stuerp/foo_vis_spectrum_analyzer/issues)  
+🌐 Forum: [Hydrogenaudio foo_vis_spectrum_analyzer](https://hydrogenaud.io/index.php/topic,125031.0.html)

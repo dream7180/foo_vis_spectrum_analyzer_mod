@@ -1,0 +1,418 @@
+
+/** $VER: State.h (2026.10.10) P. Stuer **/
+
+#pragma once
+
+#include <sdkddkver.h>
+#include <WinSock2.h>
+#include <Windows.h>
+
+#include "Constants.h"
+#include "WindowFunctions.h"
+
+#include "StyleManager.h"
+#include "GraphOptions.h"
+
+#include "Log.h"
+
+#include <vector>
+
+/// <summary>
+/// Represents the configuration of the component.
+/// </summary>
+#pragma warning(disable: 4820)
+class state_t
+{
+public:
+    state_t() noexcept;
+
+    state_t & operator=(const state_t & other) noexcept;
+
+    virtual ~state_t() noexcept { }
+
+    void Reset() noexcept;
+
+    void Read(stream_reader * reader, size_t size, abort_callback & abortHandler = fb2k::noAbort, bool isPreset = false) noexcept;
+    void Write(stream_writer * writer, abort_callback & abortHandler = fb2k::noAbort, bool isPreset = false) const noexcept;
+
+    void FromJSON(const char * data, size_t size, bool isPreset = false);
+    json ToJSON(bool isPreset = false) const;
+
+public:
+    // Configuration Dialog
+    RECT _Bounds;                                                       // Position and size of the configuration dialog. Will be initialized in OnInitDialog()
+    size_t _PageIndex;                                                  // Index of the active configuration dialog page
+
+#ifdef _WIN64
+    int64_t _TargetRefreshRate;                                         // Target FPS in Hz
+#else
+    int32_t _TargetRefreshRate;                                         // Target FPS in Hz
+#endif
+
+    int64_t _SleepTime;                                                 // Number of μs that the render thread is put to sleep to yield to the UI thread.
+
+    bool _ShowFrameCounter;
+    bool _UseHardwareRendering;                                         // Deprecated
+    bool _UseAntialiasing;                                              // Deprecated
+
+    size_t _WindowDuration;                                             // Deprecated, in μs
+
+    #pragma region Visualization
+
+        VisualizationType _VisualizationType;
+
+        #pragma region Peaks
+
+            PeakMode _PeakMode;
+            double _HoldTime;                                           // Peak hold time, in seconds
+            double _FallRate;                                           // Peak fall rate, in dB/s
+            bool _ResetPeaksOnTrackChange;                              // Reset peaks on track change.
+
+        #pragma endregion
+
+        #pragma region Bars
+
+            bool _LEDMode;                                              // True if the bars will be drawn as LEDs.
+            FLOAT _LEDLight;                                            // Size of the LED light, in pixels.
+            FLOAT _LEDGap;                                              // Gap between the LEDs lights, in pixels.
+            bool _LEDIntegralSize;                                      // The LEDs will be rendered with an integral height.
+
+        #pragma endregion
+
+        #pragma region Radial Bars
+
+            FLOAT _InnerRadius;                                         // Percentage of the smallest side of the graph area
+            FLOAT _OuterRadius;                                         // Percentage of the smallest side of the graph area
+            FLOAT _AngularVelocity;                                     // degrees / s
+
+        #pragma endregion
+
+        #pragma region Spectrogram
+
+            bool _IsScrollingSpectrogram;                               // True if the spectrogram needs to scroll.
+            bool _IsHorizontalSpectrogram;                              // True if the spectrogram should be rendered horizontally.
+            bool _UseSpectrumBarMetrics;                                // True if the same algorithm should be used as the bar spectrum.
+            bool _SpectrogramLegend;                                    // True if a legend has to be drawn.
+
+        #pragma endregion
+
+        #pragma region Peak Meter
+
+            bool _IsHorizontalPeakMeter;                                // True if the peak meter should be rendered horizontally.
+            bool _HasRMSPlus3;                                          // True if the RMS readings should be increased by 3dB.
+            bool _HasCenterScale;                                       // Render a scale between the bars.
+            bool _HasScaleLines;                                        // Render a scale between the bars.
+
+            double _RMSWindow;                                          // Duration of the RMS window, in seconds.
+            FLOAT _BarGap;                                              // Gap between the peak meter bar, in pixels.
+            FLOAT _MaxBarSize;                                          // Max. bar width / height, in pixels. 0 to disable.
+
+        #pragma endregion
+
+        #pragma region Level Meter
+
+            bool _IsHorizontalLevelMeter;                               // True if the level meter should be rendered horizontally.
+
+        #pragma endregion
+
+        #pragma region Oscilloscope / Goniometer
+
+            bool _XYMode;                                               // Oscilloscope in X-Y mode
+            double _XInputGain;                                         // Audio input gain
+            double _YInputGain;                                         // Audio input gain
+            FLOAT _Rotation;
+            bool _HasPhosphorDecay;
+            FLOAT _BlurSigma;
+            FLOAT _Afterglow;                                         // ms
+            uint32_t _FrameCount;
+            bool _Downmix;                                              // Downmix the input audio to mono.
+            bool _ZeroCrossingTrigger;                                  // Use a zero-crossing trigger.
+
+            goniometer::ColorMode _GoniometerColorMode;
+            double _LowVisualGain;                                      // dB, [-12, 12]
+            double _MidVisualGain;                                      // dB, [-12, 12]
+            double _HighVisualGain;                                     // dB, [-12, 12]
+
+        #pragma endregion
+
+        #pragma region Bit Meter
+
+            bool _OpacityMode;
+            BitMeterMode _BitMeterMode;
+            uint8_t _BitsPerInteger;
+
+        #pragma endregion
+
+    #pragma endregion
+
+    #pragma region Transform
+
+        TransformMethod _TransformMethod;                               // FFT, CQT, SWIFT, Analog Style
+
+        WindowFunction _WindowFunction;
+        double _WindowParameter;                                        // [0, 10], Parameter used for certain window functions like Gaussian and Kaiser windows. Defaults to 1.
+        double _WindowSkew;                                             // [-1, 1], Adjusts how the window function reacts to samples. Positive values makes it skew towards latest samples while negative values skews towards earliest samples. Defaults to 0 (None).
+        bool _Truncate;
+        double _ReactionAlignment;                                      // Like in Vizzy.io. Controls the delay between the actual playback and the visualization.
+                                                                        // < 0: All samples are ahead the actual playback (with the first sample equal to the actual playback)
+                                                                        //   0: The first half of samples are behind the actual playback and the second half are ahead of it (just like original foo_musical_spectrum and basically any get_spectrum_absolute() visualizations
+                                                                        // > 0: All samples are behind the playback (similar to VST audio analyzer plugins like Voxengo SPAN) with the last sample equal to the actual playback.
+
+    #pragma endregion
+
+    #pragma region FFT
+
+        FFTMode _FFTMode;                                               // bins
+        size_t _FFTCustom;                                              // bins, Custom FFT size
+        double _FFTDuration;                                            // ms, FFT size calculated based on the sample rate
+
+        int _KernelSize = 32;                                           // Lanczos interpolation kernel size, [1, 64]
+        AggregationMethod _AggregationMethod;
+        bool _SmoothLowerFrequencies;                                   // When enabled, the bandpower part only gets used when number of FFT bins to sum for each band is at least two or more (rather than one in the case of this parameter is set to disabled, which of course, has artifacts on lower frequencies similar to ones seen in spectrum visualizations on YouTube videos generated by ZGameEditor Visualizer that comes with FL Studio like this), otherwise a sinc/Lanczos-interpolated spectrum.
+        bool _SmoothGainTransition;                                     // Smoother frequency slope on sum modes
+
+        CoefficientMapping _MappingMethod;                              // Determines how the FFT coefficients are mapped to the frequency bins.
+
+        // Brown-Puckette CQT-specific
+        double _BandwidthOffset;                                        // [0, 1], Transition smoothness
+        double _BandwidthCap;                                           // [0, 1], Minimum Brown-Puckette kernel size
+        double _BandwidthAmount;                                        // [0, 256], Brown-Puckette kernel size
+        bool _UseGranularBandwidth;                                     // True: Don't constrain bandwidth to powers of 2.
+
+        WindowFunction _KernelShape;
+        double _KernelShapeParameter;                                   // [0, 10], Used for certain window functions like Gaussian and Kaiser windows. Defaults to 1.
+        double _KernelAsymmetry;                                        // [-1, 1], Adjusts how the window function reacts to samples. Positive values makes it skew towards latest samples while negative values skews towards earliest samples. Defaults to 0 (None).
+
+    #pragma endregion
+
+    #pragma region CQT
+
+        double _CQTBandwidthOffset;
+        double _CQTAlignment;
+        double _CQTDownSample;
+
+    #pragma endregion
+
+    #pragma region IIR (Infinite Impulse Response, SWIFT / Analog-style analysis)
+
+        size_t _FilterBankOrder;                                        // [1, 8], Filter bank order
+        double _TimeResolution;                                         // [0, 2000], Max. time resolution
+        double _IIRBandwidth;                                           // [0, 8], SWIFT Bandwidth
+        bool _ConstantQ;                                                // True, Use constant-Q instead of variable-Q.
+        bool _CompensateBandwidth;                                      // True, Compensate bandwidth for narrowing on higher order filters (IIR filter banks only)
+        bool _UsePreWarpedQ;                                            // False. Use prewarped Q (analog-style analyzer only)
+
+    #pragma endregion
+
+    #pragma region Frequencies
+
+        FrequencyDistribution _FrequencyDistribution;
+
+        // Frequency / Mel bands
+        size_t _BandCount;                                              // Number of frequency bands, [2, 8192]
+        size_t _MelBandCount;                                           // Number of Mel bands, [24, 128]
+
+        // Frequency range
+        double _LoFrequency;                                            // Hz, [0, 96000]
+        double _HiFrequency;                                            // Hz, [0, 96000]
+
+        // Note range
+        uint32_t _LoNote;                                               // Minimum note, [0, 143], 12 octaves
+        uint32_t _HiNote;                                               // Maximum note, [0, 143], 12 octaves
+        uint32_t _BandsPerOctave;                                       // Bands per octave, [1, 48]
+        double _TuningPitch;                                            // Hz, [0, 96000], Octave bands tuning (nearest note = tuning frequency in Hz)
+        int _Transpose;                                                 // Transpose, [-24,.24] quarter tones
+
+        ScalingFunction _ScalingFunction;
+
+        double _SkewFactor;                                             // [0, 1], Affects any adjustable frequency scaling functions like hyperbolic sine and nth root. Higher values means more linear spectrum (in the case of Avee Player's frequency distribution, exactly linear when this parameter is 1)
+        double _Bandwidth;                                              // [0, 64], Distance between low and high frequency boundaries for each band, More useful for constant-Q/variable-Q transforms and Mel/triangular filterbank energies (higher values smooths out the spectrum and reduces the visual noise) than bandpower mode.
+
+    #pragma endregion
+
+    #pragma region Filters
+
+        WeightingType _WeightingType;
+
+        double _FrequencyShift;                                         // [0, 8], Slope function offset expressed in sample rate / FFT size in samples.
+
+        double _FrequencyTilt;                                          // [-12, 12], Adjusts the spectrum by the specified number of decibels per octave.
+        double _FrequencyTiltPivot;                                     // Hz, [0, 96000], Frequency at which the tilt adjustment is 0 dB.
+
+        double _EqualizationAmount;                                     // [-12, 12], Equalize amount
+        double _EqualizationFreqScale;                                  // Hz, [0, 96000], Equalize offset
+        double _EqualizationDepth;                                      // Hz, [0, 96000], Equalize depth
+
+        double _WeightingAmount;                                        // [-1, 1], Weighting amount
+
+        crossover::Mode _CrossoverMode;
+        double _LowBand;                                                // Hz, [0, 96000], End of the low band
+        double _HighBand;                                               // Hz, [0, 96000], Start of the high band
+
+    #pragma endregion
+
+    #pragma region Common
+
+        SmoothingMethod _SmoothingMethod;
+        double _SmoothingFactor;                                        // [0, 1], Smoothing factor
+
+        bool _ShowToolTipsAlways;                                       // True if tooltips should be displayed.
+        bool _SuppressMirrorImage;                                      // True if the mirror image of the spectrum is not rendered.
+        bool _VisualizeDuringPause;                                     // True if visualization should continue when playback is paused.
+
+    #pragma endregion
+
+    #pragma region Artwork
+
+        uint32_t _NumArtworkColors;                                     // Number of colors to select from the artwork.
+        FLOAT _LightnessThreshold;                                      // [0, 1]
+        FLOAT _TransparencyThreshold;                                   // [0, 1] (Not configurable)
+
+        ColorOrder _ColorOrder;
+
+        bool _ShowArtworkOnBackground;
+        ArtworkType _ArtworkType;
+
+        FLOAT _ArtworkOpacity;                                          // [0, 1]
+        FLOAT _ArtworkBlurSigma;                                        // [0, 1]
+        std::wstring _ArtworkFilePath;                                  // Script that generates a valid file path to load artwork from.
+        FitMode _FitMode;                                               // Determines how over- or undersized artwork is rendered.
+        bool _AllowUpscaling;                                           // True if smaller artwork can be upscaled.
+        bool _FitWindow;                                                // True when the component window instead of the client area of the graph is used to fit artwork.
+
+    #pragma endregion
+
+    #pragma region Diagnostics
+
+        bool _ShowWindowFunction;
+        bool _ShowWeighingFunction;
+
+    #pragma endregion
+
+    #pragma region Graphs
+
+    size_t _GridRowCount;
+    size_t _GridColumnCount;
+    bool _VerticalLayout;                                               // Shows the graphs vertically instead of horizontally.
+    bool _OverlapGraphs;                                                // True if the graphs should be rendered overlapped instead of in a grid layout.
+
+    style_manager_t _StyleManager;                                      // Styles shared by all graphs.
+    std::vector<graph_options_t> _GraphOptions;
+
+    std::vector<Channels> _ChannelOrder;
+    #pragma endregion
+
+    std::wstring _PresetsDirectoryPath;
+
+    #pragma region Not Serialized
+
+    // These parameters will never be serialized.
+
+    #pragma region UI + Render thread
+
+    D2D1_COLOR_F _ArtworkDominantColor;                                 // The current dominant color extracted from the artwork bitmap.
+    std::vector<D2D1_GRADIENT_STOP> _ArtworkGradientStops;              // The current gradient stops extracted from the artwork bitmap.
+
+    std::vector<D2D1_COLOR_F> _UserInterfaceColors;
+
+    bool _SizeHasChanged;                                              // True if the DirectX resources need to be recreated, e.g. because the artwork colors changed or the size of the back buffer changed.
+
+    #pragma endregion
+
+    #pragma region UI thread
+
+    bool _IsDUI;                                                        // True if the Default User Interface is being used.
+    std::wstring _ActivePresetName;                                     // The name of the last loaded preset.
+    bool _ShowToolTipsNow;                                              // True when the tool tip is forced to be visible (left mousebutton down)
+
+    uint32_t _SampleRate;
+
+    #pragma endregion
+
+    #pragma region Render thread only
+
+    std::vector<D2D1_COLOR_F> _ArtworkColors;                           // The colors extracted from the artwork bitmap.
+    bool _ColorsHaveChanged;                                            // True if the colors have changed.
+
+    size_t _BinCount;                                                   // The number of bins used by the spectrum analyzer.
+
+    double _PlaybackTime;                                               // Spectrogram: Timestamp of the last rendered audio chunk.
+    double _TrackTime;                                                  // Spectrogram
+
+    bool _IsPaused;                                                     // Playback has been paused.
+
+    #pragma endregion
+
+    #pragma endregion
+
+private:
+    void ConvertColorSettings() noexcept;
+    void ConvertGraphDescription() noexcept;
+
+private:
+    #pragma region Deprecated settings
+
+    bool _UseZeroTrigger_Deprecated;
+
+    uint32_t _Channels_Deprecated;
+
+    BackgroundMode _BackgroundMode_Deprecated;
+
+    XAxisMode _XAxisMode_Deprecated;
+    bool _XAxisTop_Deprecated;
+    bool _XAxisBottom_Deprecated;
+
+    YAxisMode _YAxisMode_Deprecated;
+    bool _YAxisLeft_Deprecated;
+    bool _YAxisRight_Deprecated;
+
+    double _AmplitudeLo_Deprecated;                                     // Lower amplitude, [-120, 0]
+    double _AmplitudeHi_Deprecated;                                     // Upper amplitude, [-120, 0]
+    double _AmplitudeStep_Deprecated;
+
+    bool _UseAbsolute_Deprecated;                                       // Linear/n-th root scaling: Sets the min. dB range to -∞ dB (0.0 on linear amplitude) when enabled. This only applies when not using logarithmic amplitude scale (or in other words, using linear/nth root amplitude scaling) as by mathematical definition. Logarithm of any base of zero is always -Infinity.
+    double _Gamma_Deprecated;                                           // Linear/n-th root scaling: Index n of the n-th root calculation, [0.5, 10]
+
+    ColorScheme _ColorScheme_Deprecated;
+    std::vector<D2D1_GRADIENT_STOP> _CustomGradientStops_Deprecated;
+
+    D2D1_COLOR_F _BackColor_Deprecated;
+    bool _UseCustomBackColor_Deprecated;
+
+    D2D1_COLOR_F _XTextColor_Deprecated;
+    bool _UseCustomXTextColor_Deprecated;
+
+    D2D1_COLOR_F _XLineColor_Deprecated;
+    bool _UseCustomXLineColor_Deprecated;
+
+    D2D1_COLOR_F _YTextColor_Deprecated;
+    bool _UseCustomYTextColor_Deprecated;
+
+    D2D1_COLOR_F _YLineColor_Deprecated;
+    bool _UseCustomYLineColor_Deprecated;
+
+    D2D1_COLOR_F _LightBandColor_Deprecated;
+    D2D1_COLOR_F _DarkBandColor_Deprecated;
+
+    FLOAT _LineWidth_Deprecated;
+    D2D1_COLOR_F _LineColor_Deprecated;
+    bool _UseCustomLineColor_Deprecated;
+    D2D1_COLOR_F _PeakLineColor_Deprecated;
+    bool _UseCustomPeakLineColor_Deprecated;
+    FLOAT _AreaOpacity_Deprecated;                                      // [0, 1]
+
+    bool _DrawBandBackground_Deprecated;                                // True if the background for each band should be drawn.
+    bool _HorizontalGradient_Deprecated;                                // True if the gradient will be used to paint horizontally.
+
+    const std::vector<D2D1_GRADIENT_STOP> SelectGradientStops_Deprecated(ColorScheme colorScheme) const noexcept;
+
+    #pragma endregion
+
+private:
+    static constexpr size_t _CurrentVersion = 35; // v0.10.0.0-beta1
+    static constexpr uint32_t _SchemaVersion = 3; // v0.13.0.0-alpha2
+};
+
+const LogLevel DefaultCfgLogLevel = LogLevel::Info;
+
+extern cfg_int CfgLogLevel;

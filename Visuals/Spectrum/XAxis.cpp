@@ -1,0 +1,402 @@
+
+/** $VER: XAXis.cpp (2026.10.10) P. Stuer - Implements the X axis of a graph. **/
+
+#include "pch.h"
+
+#include "XAxis.h"
+
+#include "DirectWrite.h"
+#include "FrequencyScaler.h"
+#include "StyleManager.h"
+
+#pragma hdrstop
+
+/// <summary>
+/// Initializes this instance.
+/// </summary>
+void x_axis_t::Configure(state_t * state, graph_options_t * graphOptions, analysis_t * analysis, bool isFirst, bool isLast, ID3D11Device * d3dDevice, ID3D11DeviceContext * d3dDeviceContext) noexcept
+{
+    _State        = state;
+    _GraphOptions = graphOptions;
+    _Analysis     = analysis;
+
+    _Labels.clear();
+
+    const frequency_bands_t & fb = _Analysis->_FrequencyBands;
+
+    if (fb.empty())
+        return;
+
+    _BandCount = fb.size();
+
+    _LoFrequency = fb.front().Mid;
+    _HiFrequency = fb.back().Mid;
+
+    // Precalculate the labels.
+    {
+        WCHAR Text[32] = { };
+
+        switch (graphOptions->_XAxisMode)
+        {
+            case XAxisMode::None:
+                break;
+
+            default:
+
+            case XAxisMode::Bands:
+            {
+                for (size_t i = 0; i < _BandCount; i += 10)
+                {
+                    const double Frequency = fb[i].Mid;
+
+                    if (Frequency < 1000.)
+                        ::StringCchPrintfW(Text, _countof(Text), L"%.*f", graphOptions->_XAxisDecimals, Frequency);
+                    else
+                        ::StringCchPrintfW(Text, _countof(Text), L"%.*fk", graphOptions->_XAxisDecimals, Frequency / 1000.);
+
+                    label_t lb = { Text, Frequency };
+
+                    _Labels.push_back(lb);
+                }
+                break;
+            }
+
+            case XAxisMode::Decades:
+            {
+                double Frequency = 0.;
+                int i = 1;
+                int j = 10;
+
+                while (Frequency < fb.back().Lo)
+                {
+                    Frequency = j * i;
+
+                    if (Frequency < 1000.)
+                        ::StringCchPrintfW(Text, _countof(Text), L"%.*f", graphOptions->_XAxisDecimals, Frequency);
+                    else
+                        ::StringCchPrintfW(Text, _countof(Text), L"%.*fk", graphOptions->_XAxisDecimals, Frequency / 1000.);
+
+                    label_t lb = { Text, Frequency };
+
+                    _Labels.push_back(lb);
+
+                    if (++i == 10)
+                    {
+                        i = 1;
+                        j *= 10;
+                    }
+                }
+                break;
+            }
+
+            case XAxisMode::Octaves:
+            {
+                double Note = -57.;                                                 // Index of C0 (57 semi-tones lower than A4 at 440Hz)
+                double Frequency = _State->_TuningPitch * std::exp2(Note / 12.);    // Frequency of C0
+
+                for (int i = 0; Frequency < fb.back().Lo; ++i)
+                {
+                    ::StringCchPrintfW(Text, _countof(Text), L"C%d", i);
+
+                    label_t lb = { Text, Frequency };
+
+                    _Labels.push_back(lb);
+
+                    Note += 12.;
+                    Frequency = _State->_TuningPitch * std::exp2(Note / 12.);
+                }
+                break;
+            }
+
+            case XAxisMode::Notes:
+            {
+                static constexpr const char Name[] = { 'C', 'D', 'E', 'F', 'G', 'A', 'B' };
+                static constexpr const int Step[] = { 2, 2, 1, 2, 2, 2, 1 };
+
+                double Note = -57.;                                                 // Index of C0 (57 semi-tones lower than A4 at 440Hz)
+                double Frequency = _State->_TuningPitch * std::exp2(Note / 12.);    // Frequency of C0
+
+                int j = 0;
+
+                while (Frequency < fb.back().Lo)
+                {
+                    int Octave = (int) ((Note + 57.) / 12.);
+
+                    if (j == 0)
+                        ::StringCchPrintfW(Text, _countof(Text), L"%c%d", Name[j], Octave);
+                    else
+                        ::StringCchPrintfW(Text, _countof(Text), L"%c", Name[j]);
+
+                    label_t lb = { Text, Frequency, j != 0 };
+
+                    _Labels.push_back(lb);
+
+                    Note += Step[j];
+                    Frequency = _State->_TuningPitch * std::exp2(Note / 12.);
+
+                    if (j < 6) j++; else j = 0;
+                }
+                break;
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Moves this instance on the canvas.
+/// </summary>
+void x_axis_t::Move(const D2D1_RECT_F & rect) noexcept
+{
+    InitializeMetrics(rect);
+}
+
+/// <summary>
+/// Renders this instance to the specified render target.
+/// </summary>
+void x_axis_t::Render(ID2D1DeviceContext * deviceContext) noexcept
+{
+    auto & StyleManager = _GraphOptions->_UseLocalStyles ? _GraphOptions->_StyleManager : _State->_StyleManager;
+
+    HRESULT hr = CreateDeviceSpecificResources(deviceContext, StyleManager);
+
+    if (FAILED(hr))
+        return;
+
+    deviceContext->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+
+    FLOAT Opacity = _TextStyle._Brush->GetOpacity();
+
+    _TextStyle.SetHorizontalAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+
+    for (const label_t & Iter : _Labels)
+    {
+        // Draw the vertical grid line.
+        if (_LineStyle.IsEnabled())
+            deviceContext->DrawLine(Iter.PointT, Iter.PointB, _LineStyle._Brush.Get(), _LineStyle._Thickness, nullptr);
+
+        // Draw the text.
+        if (!Iter.IsHidden && _TextStyle.IsEnabled() && (_GraphOptions->_XAxisMode != XAxisMode::None))
+        {
+            _TextStyle._Brush->SetOpacity(Iter.IsDimmed && (_GraphOptions->_XAxisMode == XAxisMode::Notes) ? Opacity * .5f : Opacity);
+
+            if (_GraphOptions->_XAxisTop)
+                deviceContext->DrawText(Iter.Text.c_str(), (UINT) Iter.Text.size(), _TextStyle._TextFormat.Get(), Iter.RectT, _TextStyle._Brush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+            if (_GraphOptions->_XAxisBottom)
+                deviceContext->DrawText(Iter.Text.c_str(), (UINT) Iter.Text.size(), _TextStyle._TextFormat.Get(), Iter.RectB, _TextStyle._Brush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        }
+    }
+
+    _TextStyle._Brush->SetOpacity(Opacity);
+}
+
+#pragma region DirectX
+
+/// <summary>
+/// Creates resources which are bound to a particular D3D device.
+/// </summary>
+HRESULT x_axis_t::CreateDeviceSpecificResources(ID2D1DeviceContext * deviceContext, style_manager_t & styleManager) noexcept
+{
+    HRESULT hr = S_OK;
+
+    if (_State->_ColorsHaveChanged || _State->_SizeHasChanged)
+    {
+        DeleteColorDependentResources();
+
+        Initialize();
+
+        hr = CreateColorDependentResources(deviceContext, styleManager);
+
+        if (FAILED(hr))
+            return hr;
+    }
+
+    if (_State->_SizeHasChanged)
+    {
+        DeleteSizeDependentResources();
+
+        Initialize();
+
+        hr = CreateSizeDependentResources(deviceContext, styleManager);
+
+        if (FAILED(hr))
+            return hr;
+    }
+
+    return hr;
+}
+
+/// <summary>
+/// Releases the device specific resources.
+/// </summary>
+void x_axis_t::DeleteDeviceSpecificResources() noexcept
+{
+    DeleteColorDependentResources();
+    DeleteSizeDependentResources();
+}
+
+/// <summary>
+/// Creates the resources that depend on the size of the render target.
+/// </summary>
+HRESULT x_axis_t::CreateSizeDependentResources(ID2D1DeviceContext * deviceContext, style_manager_t & styleManager) noexcept
+{
+    return S_OK;
+}
+
+/// <summary>
+/// Deletes the resources that depend on the size of the render target.
+/// </summary>
+void x_axis_t::DeleteSizeDependentResources() noexcept
+{
+}
+
+/// <summary>
+/// Creates the resources that depend on the color palette.
+/// </summary>
+HRESULT x_axis_t::CreateColorDependentResources(ID2D1DeviceContext * deviceContext, style_manager_t & styleManager) noexcept
+{
+    if (_LineStyle._Brush == nullptr)
+    {
+        _LineStyle = *styleManager.GetStyle(VisualElement::VerticalGridLine);
+
+        _LineStyle.SetColor(_State);
+
+        HRESULT hr = _LineStyle.CreateDeviceSpecificResources(deviceContext, _Size, L"", 1.f);
+
+        if (FAILED(hr))
+            return hr;
+    }
+
+    if (_TextStyle._Brush == nullptr)
+    {
+        _TextStyle = *styleManager.GetStyle(VisualElement::XAxisText);
+
+        _TextStyle.SetColor(_State);
+
+        HRESULT hr = _TextStyle.CreateDeviceSpecificResources(deviceContext, _Size, L"999.9k", 1.f);
+
+        if (FAILED(hr))
+            return hr;
+    }
+
+    return S_OK;
+}
+
+/// <summary>
+/// Deletes the resources that depend on the color palette.
+/// </summary>
+void x_axis_t::DeleteColorDependentResources() noexcept
+{
+    _TextStyle.DeleteDeviceSpecificResources();
+    _LineStyle.DeleteDeviceSpecificResources();
+}
+
+/// <summary>
+/// Recalculates parameters that are render target and size-sensitive.
+/// </summary>
+void x_axis_t::Initialize() noexcept
+{
+    assert((_Size.width > 0.f) && (_Size.height > 0.f));
+
+    FLOAT t = _Size.width / (FLOAT) _BandCount;
+
+    // Use the full width of the graph?
+    if (_GraphOptions->_HorizontalAlignment != HorizontalAlignment::Fit)
+        t = std::floor(t);
+
+    // Calculate the position of the labels.
+    const FLOAT BarWidth = std::max(t, 2.f); // In DIP
+    const FLOAT SpectrumWidth = (_State->_VisualizationType == VisualizationType::Bars) ? BarWidth * (FLOAT) _BandCount : _Size.width;
+    const FLOAT HOffset = GetHOffset(_GraphOptions->_HorizontalAlignment, _Size.width - SpectrumWidth);
+
+    const FLOAT x1 = !_GraphOptions->_FlipHorizontally ? _Rect.left  + HOffset : _Rect.right - HOffset;
+    const FLOAT x2 = !_GraphOptions->_FlipHorizontally ? _Rect.right - HOffset : _Rect.left  + HOffset;
+
+    const FLOAT yt = _Rect.top    + (_GraphOptions->_XAxisTop    ? _TextStyle._Height : 0.f); // Top axis
+    const FLOAT yb = _Rect.bottom - (_GraphOptions->_XAxisBottom ? _TextStyle._Height : 0.f); // Bottom axis
+
+    const double MinScale = ScaleFrequency(_LoFrequency, _State->_ScalingFunction, _State->_SkewFactor);
+    const double MaxScale = ScaleFrequency(_HiFrequency, _State->_ScalingFunction, _State->_SkewFactor);
+
+    // Calculate the rectangles of the labels.
+    for (label_t & Iter : _Labels)
+    {
+        const FLOAT dx = msc::Map(ScaleFrequency(Iter.Frequency, _State->_ScalingFunction, _State->_SkewFactor), MinScale, MaxScale, 0.f, SpectrumWidth);
+
+        const FLOAT x = !_GraphOptions->_FlipHorizontally ? (x1 + dx) : (x1 - dx);
+
+        Iter.PointT = D2D1_POINT_2F(x, yt);
+        Iter.PointB = D2D1_POINT_2F(x, yb);
+
+        {
+            ComPtr<IDWriteTextLayout> TextLayout;
+
+            HRESULT hr = DirectWriteFactory::Get()->CreateTextLayout(Iter.Text.c_str(), (UINT) Iter.Text.size(), _TextStyle._TextFormat.Get(), _Size.width, _Size.height, TextLayout.GetAddressOf());
+
+            if (SUCCEEDED(hr))
+            {
+                DWRITE_TEXT_METRICS TextMetrics = { };
+
+                TextLayout->GetMetrics(&TextMetrics);
+
+                Iter.RectT = { x - (TextMetrics.width / 2.f), _Rect.top, x + (TextMetrics.width / 2.f), yt };
+
+                // Make sure the label is completely visible.
+                if (!_GraphOptions->_FlipHorizontally)
+                {
+                    if (Iter.RectT.left < x1)
+                    {
+                        Iter.RectT.left  = x1;
+                        Iter.RectT.right = x1 + TextMetrics.width;
+                    }
+                    else
+                    if (Iter.RectT.right > x2)
+                    {
+                        Iter.RectT.left  = x2 - TextMetrics.width;
+                        Iter.RectT.right = x2;
+                    }
+                }
+                else
+                {
+                    if (Iter.RectT.right > x1)
+                    {
+                        Iter.RectT.left  = x1 - TextMetrics.width;
+                        Iter.RectT.right = x1;
+                    }
+                    else
+                    if (Iter.RectT.left < x2)
+                    {
+                        Iter.RectT.left  = x2;
+                        Iter.RectT.right = x2 + TextMetrics.width;
+                    }
+                }
+
+                Iter.RectB = { Iter.RectT.left, yb, Iter.RectT.right, _Rect.bottom };
+            }
+        }
+
+        // Labels outside the client rectangle are always hidden.
+        Iter.IsHidden = !msc::InRange(x, _Rect.left, _Rect.right);
+    }
+
+    if (_Labels.size() > 2)
+    {
+        const bool NotesMode = (_GraphOptions->_XAxisMode == XAxisMode::Notes);
+
+        const label_t * LastLabel = nullptr;
+
+        // Determine which labels should be hidden.
+        for (size_t i = 1; i < _Labels.size() - 1; ++i)
+        {
+            if (LastLabel && !(LastLabel->IsHidden) && IsOverlappingHorizontally(_Labels[i].RectB, LastLabel->RectB))
+                _Labels[i].IsHidden = !NotesMode || (NotesMode && !_Labels[i + 1].IsDimmed);
+            else
+            if (!_Labels[i + 1].IsHidden && NotesMode && IsOverlappingHorizontally(_Labels[i].RectB, _Labels[i + 1].RectB))
+                _Labels[i].IsHidden = !_Labels[i + 1].IsDimmed;
+            else
+                LastLabel = &_Labels[i];
+        }
+    }
+}
+
+#pragma endregion

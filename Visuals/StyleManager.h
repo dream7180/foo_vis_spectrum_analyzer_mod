@@ -1,0 +1,63 @@
+
+/** $VER: StyleManager.h (2026.09.30) P. Stuer - Creates and manages the DirectX resources of the styles. **/
+
+#pragma once
+
+#include "pch.h"
+
+#include "Style.h"
+#include "Gradient.h"
+
+#pragma warning(disable: 4868) // compiler may not enforce left-to-right evaluation order in braced initializer list
+
+#include <nlohmann\json.hpp>
+
+using json = nlohmann::ordered_json;
+
+#pragma warning(default: 4868)
+
+class style_manager_t
+{
+public:
+    style_manager_t();
+
+    style_manager_t(const style_manager_t & other);
+    style_manager_t & operator=(const style_manager_t & other);
+
+    style_manager_t(const style_manager_t && other) = delete;
+    style_manager_t & operator=(const style_manager_t && other) = delete;
+
+    virtual ~style_manager_t() noexcept { }
+
+    void Reset() noexcept;
+
+    void Read(stream_reader * reader, size_t size, abort_callback & abortHandler = fb2k::noAbort) noexcept;
+    void Write(stream_writer * writer, abort_callback & abortHandler = fb2k::noAbort) const noexcept;
+
+    json ToJSON() const noexcept;
+    void FromJSON(const json & array) noexcept;
+
+    /// <summary>
+    /// Gets the style of the specified visual element.
+    /// </summary>
+    style_t * GetStyle(VisualElement visualElement) noexcept
+    {
+        return &_Styles[visualElement];
+    }
+
+private:
+    static json ToJSON(const std::vector<gradient_stop_t> & gradientStops) noexcept;
+    static json ToJSON(const gradient_stop_t & gradientStop) noexcept;
+    static json ToJSON(const D2D1_COLOR_F & color) noexcept;
+
+    static std::vector<gradient_stop_t>FromJSONGradientStops(const json::array_t & array) noexcept;
+    static gradient_stop_t             FromJSONGradientStop(const json & object) noexcept;
+    static D2D1_COLOR_F                FromJSONColor(const json & object) noexcept;
+
+private:
+    std::unordered_map<VisualElement, style_t> _Styles;
+
+    static std::unordered_map<VisualElement, style_t> _DefaultStyles;
+
+    const uint32_t _CurrentVersion = 5;
+};

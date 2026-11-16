@@ -1,0 +1,120 @@
+
+/** $VER: Page.h (2026.10.03) P. Stuer - Implements a configuration dialog page. **/
+
+#pragma once
+
+#include "pch.h"
+
+#include <sdk/coreDarkMode.h>
+#include <sdk/cfg_var.h>
+
+#include "DialogParameters.h"
+#include "State.h"
+#include "Resources.h"
+
+#include "NumericEdit.h"
+#include "ColorButton.h"
+#include "ColorListBox.h"
+
+class page_t : public CDialogImpl<page_t>
+{
+public:
+    page_t(int id) : IDD(id) { }
+
+    virtual ~page_t() = default; // Virtual destructor for proper polymorphic deletion
+
+    virtual BOOL OnInitDialog(CWindow w, LPARAM lParam) noexcept;
+    void OnShowWindow(BOOL isBeingShown, INT status) noexcept;
+    HBRUSH OnCtlColorDlg(HDC, HWND) const noexcept;
+    void OnDestroy() noexcept;
+
+    virtual void OnSelectionChanged(UINT, int, CWindow) noexcept { };
+    virtual void OnEditChange(UINT, int, CWindow) noexcept { };
+    virtual void OnEditLostFocus(UINT code, int id, CWindow) noexcept { };
+    virtual void OnButtonClick(UINT, int, CWindow) noexcept { };
+    virtual void OnDoubleClick(UINT, int, CWindow) noexcept { };
+
+    virtual LRESULT OnDeltaPos(LPNMHDR nmhd) noexcept { return -1; }; // Prevent the change of the up-down control position.
+    virtual LRESULT OnChanged(LPNMHDR nmhd) noexcept { return 0; };
+
+    virtual LRESULT OnHScroll(UINT, WPARAM, LPARAM) noexcept { return 1; };
+
+    virtual LRESULT OnConfigurationChanged(UINT msg, WPARAM wParam, LPARAM lParam) noexcept;
+
+protected:
+    void NotifyParent(ConfigurationChanges settings) const noexcept;
+
+    virtual void InitializeControls() noexcept = 0;
+    virtual void UpdateControls() noexcept = 0;
+    virtual void TerminateControls() noexcept = 0;
+
+    static int ClampNewSpinPosition(LPNMUPDOWN nmud, int minValue, int maxValue) noexcept;
+    static double ClampNewSpinPosition(LPNMUPDOWN nmud, double minValue, double maxValue, double scale) noexcept;
+
+    void SetInteger(int id, int64_t value) noexcept;
+    void SetDouble(int id, double value, unsigned width = 0, unsigned precision = 2) noexcept;
+    void SetNote(int id, uint32_t noteNumber) noexcept;
+
+    /// <summary>
+    /// Set the value of a property. Returns true if the property value actually changed.
+    /// </summary>
+    template <class T> bool SetProperty(T & propertyValue, T newValue)
+    {
+        if (propertyValue == newValue)
+            return false;
+
+        propertyValue = newValue;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Set the value of a property. Returns true if the property value actually changed.
+    /// </summary>
+    bool SetProperty(std::wstring & propertyValue, std::wstring newValue)
+    {
+        if (propertyValue == newValue)
+            return false;
+
+        propertyValue = newValue;
+
+        return true;
+    }
+
+private:
+    BEGIN_MSG_MAP(page_t)
+        MSG_WM_INITDIALOG(OnInitDialog)
+        MSG_WM_SHOWWINDOW(OnShowWindow)
+        MSG_WM_CTLCOLORDLG(OnCtlColorDlg)
+
+        COMMAND_CODE_HANDLER_EX(CBN_SELCHANGE, OnSelectionChanged) // This also handles LBN_SELCHANGE
+        COMMAND_CODE_HANDLER_EX(EN_CHANGE, OnEditChange)
+        COMMAND_CODE_HANDLER_EX(EN_KILLFOCUS, OnEditLostFocus)
+        COMMAND_CODE_HANDLER_EX(BN_CLICKED, OnButtonClick)
+        COMMAND_CODE_HANDLER_EX(LBN_DBLCLK, OnDoubleClick)
+
+        NOTIFY_CODE_HANDLER_EX(UDN_DELTAPOS, OnDeltaPos)
+        NOTIFY_CODE_HANDLER_EX(NM_CHANGED, OnChanged)
+
+        MESSAGE_HANDLER_EX(WM_HSCROLL, OnHScroll)
+
+        REFLECT_NOTIFICATIONS() // Required for color_list_box_t
+    END_MSG_MAP()
+
+public:
+    int IDD;
+
+protected:
+    HWND _hParent {};
+    state_t * _State {};
+
+    bool _IsInitializing { false };         // True of the dialog is initializing a lot of controls and the UI thread should not be notified of the changes.
+    bool _IgnoreNotifications { false };    // True if the notifications of the controls should be ignored.
+
+    CToolTipCtrl _ToolTipControl;
+
+    std::vector<std::shared_ptr<numeric_edit_t>> _NumericEdits;
+
+private:
+    fb2k::CCoreDarkModeHooks _DarkMode;
+};

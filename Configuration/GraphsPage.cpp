@@ -1,0 +1,1055 @@
+
+/** $VER: GraphsPage.cpp (2026.10.03) P. Stuer - Implements a configuration dialog page. **/
+
+#include "pch.h"
+
+#include "GraphsPage.h"
+#include "Constants.h"
+
+#include <Toggle.h>
+
+#include <bit>
+
+// Display names for the audio_chunk channel bits.
+static constexpr const WCHAR * const ChannelNames[] =
+{
+    L"Front Left", L"Front Right",
+    L"Front Center",
+    L"Low Frequency Effects",
+    L"Back Left", L"Back Right",
+    L"Front Left of Center", L"Front Right of Center",
+    L"Back Center",
+    L"Side Left", L"Side Right",
+    L"Top Center",
+    L"Top Front Left", L"Top Front Center", L"Top Front Right",
+    L"Top Back Left", L"Top Back Center", L"Top Back Right",
+};
+
+/// <summary>
+/// Initializes the page.
+/// </summary>
+BOOL graphs_page_t::OnInitDialog(CWindow w, LPARAM lParam) noexcept
+{
+    __super::OnInitDialog(w, lParam);
+
+    static const std::unordered_map<int, const char * const> Tips =
+    {
+        { IDC_GRAPH_SETTINGS, "Shows the list of graphs." },
+
+        { IDC_ADD_GRAPH, "Adds a graph." },
+        { IDC_REMOVE_GRAPH, "Removes the selected graph." },
+
+        { IDC_VERTICAL_LAYOUT, "Select to stack the graphs vertically instead of horizontally." },
+        { IDC_OVERLAP_GRAPHS, "Select to draw the graphs overlapped instead of stacked horizontally or vertically." },
+        { IDC_USE_LOCAL_STYLES, "Use local instead of global styles." },
+
+        { IDC_GRAPH_DESCRIPTION, "Describes the configuration of this graph." },
+
+        { IDC_HORIZONTAL_ALIGNMENT, "Determines how the visualization gets horizontally aligned in the graph area." },
+
+        { IDC_FLIP_HORIZONTALLY, "Renders the visualization from right to left." },
+        { IDC_FLIP_VERTICALLY, "Renders the visualization upside down." },
+
+        { IDC_Y_AXIS_LEFT, "Enables or disables an axis left of the visualization." },
+        { IDC_Y_AXIS_RIGHT, "Enables or disables an axis right of the visualization." },
+        { IDC_X_AXIS_TOP, "Enables or disables an axis above the visualization." },
+        { IDC_X_AXIS_BOTTOM, "Enables or disables an axis below the visualization." },
+
+        // Frequency axis
+        { IDC_X_AXIS_MODE, "Determines the type of frequency axis." },
+        { IDC_X_AXIS_DECIMALS, "Determines the number of decimals used by the frequency labels." },
+
+        // Amplitude axis
+        { IDC_Y_AXIS_MODE, "Determines the type of amplitude axis." },
+
+        { IDC_AMPLITUDE_LO, "Sets the lowest amplitude to display." },
+        { IDC_AMPLITUDE_HI, "Sets the highest amplitude to display." },
+        { IDC_AMPLITUDE_STEP, "Sets the amplitude increment." },
+
+        { IDC_USE_ABSOLUTE, "Sets the min. amplitude to -∞ dB (0.0 on the linear scale) when enabled." },
+        { IDC_GAMMA, "Sets index n of the n-th root calculation." },
+
+        // Channels
+        { IDC_CHANNELS, "Determines which channels are used by the visualization." },
+        { IDC_ALL_CHANNELS, "Selects all channels." },
+        { IDC_NO_CHANNELS, "Deselects all channels." },
+        { IDC_CHANNEL_UP, "Moves the selected channel up in the list." },
+        { IDC_CHANNEL_DOWN, "Moves the selected channel down in the list." },
+
+        { IDC_CHANNEL_PAIRS, "Determines which combination of channels will be displayed." },
+        { IDC_SWAP_CHANNELS, "Swaps the channels of a channel pair during visualisation e.g. the X and Y axis of an oscilloscope." },
+    };
+
+    for (const auto & [ID, Text] : Tips)
+        _ToolTipControl.AddTool(CToolInfo(TTF_IDISHWND | TTF_SUBCLASS, m_hWnd, (UINT_PTR) GetDlgItem(ID).m_hWnd, nullptr, (LPWSTR) msc::UTF8ToWide(Text).c_str()));
+
+    return TRUE;
+}
+
+/// <summary>
+/// Initializes the controls of the page.
+/// </summary>
+void graphs_page_t::InitializeControls() noexcept
+{
+    _SelectedGraph = 0;
+
+    auto & Options = _State->_GraphOptions[_SelectedGraph];
+
+    // Vertical layout
+    {
+        SendDlgItemMessageW(IDC_VERTICAL_LAYOUT, BM_SETCHECK, _State->_VerticalLayout);
+    }
+
+    // Overlap graphs
+    {
+        SendDlgItemMessageW(IDC_OVERLAP_GRAPHS, BM_SETCHECK, _State->_OverlapGraphs);
+    }
+
+    // Use local styles
+    {
+        SendDlgItemMessageW(IDC_USE_LOCAL_STYLES, BM_SETCHECK, Options._UseLocalStyles);
+    }
+
+    // Horizontal Alignment
+    {
+        CComboBox w(GetDlgItem(IDC_HORIZONTAL_ALIGNMENT));
+
+        w.ResetContent();
+
+        for (const auto & x : { L"Near", L"Center", L"Far", L"Fit" })
+            w.AddString(x);
+
+        w.SetCurSel((int) Options._HorizontalAlignment);
+    }
+
+    // X Axis
+    {
+        InitializeXAxisMode();
+    }
+
+    // Y Axis
+    {
+        InitializeYAxisMode();
+    }
+
+    {
+        UDACCEL Accel[] =
+        {
+            { 1,     10 }, //  0.1
+            { 2,    100 }, //  1.0
+            { 3,    250 }, //  2.5
+            { 4,    500 }, //  5.0
+        };
+
+        {
+            auto ne = std::make_shared<numeric_edit_t>(); ne->Initialize(GetDlgItem(IDC_AMPLITUDE_LO)); _NumericEdits.push_back(ne);
+
+            CUpDownCtrl w(GetDlgItem(IDC_AMPLITUDE_LO_SPIN));
+
+            w.SetAccel(_countof(Accel), Accel);
+            w.SetRange32((int) (MinAmplitude * 10.), (int) (MaxAmplitude * 10.));
+
+            SetDouble(IDC_AMPLITUDE_LO, Options._AmplitudeLo);
+            w.SetPos32((int) (Options._AmplitudeLo * 10.));
+        }
+
+        {
+            auto ne = std::make_shared<numeric_edit_t>(); ne->Initialize(GetDlgItem(IDC_AMPLITUDE_HI)); _NumericEdits.push_back(ne);
+
+            CUpDownCtrl w(GetDlgItem(IDC_AMPLITUDE_HI_SPIN));
+
+            w.SetAccel(_countof(Accel), Accel);
+            w.SetRange32((int) (MinAmplitude * 10), (int) (MaxAmplitude * 10.));
+
+            SetDouble(IDC_AMPLITUDE_HI, Options._AmplitudeHi);
+            w.SetPos32((int) (Options._AmplitudeHi * 10.));
+        }
+
+        {
+            auto ne = std::make_shared<numeric_edit_t>(); ne->Initialize(GetDlgItem(IDC_AMPLITUDE_STEP)); _NumericEdits.push_back(ne);
+
+            CUpDownCtrl w(GetDlgItem(IDC_AMPLITUDE_STEP_SPIN));
+
+            w.SetAccel(_countof(Accel), Accel);
+            w.SetRange32((int) (MinAmplitudeStep * 10), (int) (MaxAmplitudeStep * 10.));
+
+            SetDouble(IDC_AMPLITUDE_STEP, Options._AmplitudeStep, 0, 1);
+            w.SetPos32((int) (Options._AmplitudeStep * 10.));
+        }
+    }
+
+    // Used by the Linear/n-th root y-axis mode.
+    {
+        SendDlgItemMessageW(IDC_USE_ABSOLUTE, BM_SETCHECK, Options._UseAbsolute);
+
+        auto ne = std::make_shared<numeric_edit_t>(); ne->Initialize(GetDlgItem(IDC_GAMMA)); _NumericEdits.push_back(ne);
+        SetDouble(IDC_GAMMA, Options._Gamma, 0, 1);
+    }
+
+    // Channels
+    {
+        static_assert(_countof(ChannelNames) == audio_chunk::defined_channel_count, "Channels enum mismatch"); // Protection against SDK changes
+        static_assert(_countof(ChannelNames) == (size_t) Channels::Count, "Insufficient channels names");
+
+        CListViewCtrl w(GetDlgItem(IDC_CHANNELS));
+
+        w.DeleteAllItems();
+
+        w.InsertColumn(0, L"", LVCFMT_LEFT, 250, 0);
+
+        for (const auto Channel : _State->_ChannelOrder)
+        {
+            const auto ChannelIndex = (size_t) std::countr_zero((uint32_t) Channel);
+
+            w.AddItem(-1, 0, ChannelNames[ChannelIndex]);
+        }
+
+        w.SetExtendedListViewStyle(/*LVS_EX_FULLROWSELECT |*/ LVS_EX_DOUBLEBUFFER /*| LVS_EX_AUTOCHECKSELECT*/ | LVS_EX_AUTOSIZECOLUMNS | LVS_EX_BORDERSELECT | LVS_EX_CHECKBOXES);
+    }
+
+    // Channel Up / Channel Down
+    {
+        _SymbolFont = ::CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI Symbol");
+
+        GetDlgItem(IDC_CHANNEL_UP)  .SetWindowText(L"\u2191");
+        GetDlgItem(IDC_CHANNEL_UP)  .SetFont(_SymbolFont);
+
+        GetDlgItem(IDC_CHANNEL_DOWN).SetWindowText(L"\u2193");
+        GetDlgItem(IDC_CHANNEL_DOWN)  .SetFont(_SymbolFont);
+    }
+
+    // Channel pairs
+    {
+        CComboBox w(GetDlgItem(IDC_CHANNEL_PAIRS));
+
+        w.ResetContent();
+
+        for (const auto & x : { L"Front Left/Right", L"Back Left/Right", L"Front Center Left/Right", L"Side Left/Right", L"Top Front Left/Right", L"Top Back Left/Right" })
+            w.AddString(x);
+
+        w.SetCurSel((int) Options._ChannelPair);
+    }
+
+    // Swap channels of a channel pair
+    {
+        SendDlgItemMessageW(IDC_SWAP_CHANNELS, BM_SETCHECK, Options._SwapChannels);
+    }
+
+    UpdateControls();
+}
+
+/// <summary>
+/// Updates the controls of the page.
+/// </summary>
+void graphs_page_t::UpdateControls() noexcept
+{
+    const bool IsBars         = (_State->_VisualizationType == VisualizationType::Bars);
+    const bool IsCurve        = (_State->_VisualizationType == VisualizationType::Curve);
+    const bool IsSpectrogram  = (_State->_VisualizationType == VisualizationType::Spectrogram);
+
+    const bool IsPeakMeter    = (_State->_VisualizationType == VisualizationType::PeakMeter);
+    const bool IsLevelMeter   = (_State->_VisualizationType == VisualizationType::LevelMeter);
+
+    const bool IsOscilloscope = (_State->_VisualizationType == VisualizationType::Oscilloscope);
+    const bool IsGoniometer   = (_State->_VisualizationType == VisualizationType::Goniometer);
+
+    const bool IsBitMeter     = (_State->_VisualizationType == VisualizationType::BitMeter);
+
+    const bool IsOscilloscopeXY = IsOscilloscope && _State->_XYMode;
+
+    /* Graph Descriptions */
+
+    {
+        CListBox w(GetDlgItem(IDC_GRAPH_SETTINGS));
+
+        w.ResetContent();
+
+        uint32_t i = 1;
+
+        for (const auto & Iter : _State->_GraphOptions)
+        {
+            w.AddString(!Iter._Description.empty() ? Iter._Description.c_str() : msc::FormatText(L"Graph %u", i).c_str());
+
+            i++;
+        }
+
+        w.SetCurSel((int) _SelectedGraph);
+    }
+
+    if (_State->_VerticalLayout)
+    {
+        _State->_GridRowCount    = (size_t) _State->_GraphOptions.size();
+        _State->_GridColumnCount = (size_t) 1;
+    }
+    else
+    {
+        _State->_GridRowCount    = (size_t) 1;
+        _State->_GridColumnCount = (size_t) _State->_GraphOptions.size();
+    }
+
+    for (auto & gd : _State->_GraphOptions)
+    {
+        gd._HRatio = 1.f / (FLOAT) _State->_GridColumnCount;
+        gd._VRatio = 1.f / (FLOAT) _State->_GridRowCount;
+    }
+
+    GetDlgItem(IDC_REMOVE_GRAPH).EnableWindow(_State->_GraphOptions.size() > 1);
+
+    /* Vertical layout **/
+
+    const bool SupportsVerticalLayout = (_State->_GraphOptions.size() > 1) && !_State->_OverlapGraphs;
+
+    GetDlgItem(IDC_VERTICAL_LAYOUT).EnableWindow(SupportsVerticalLayout);
+
+    /* Overlap graphs **/
+
+    const bool SupportsOverlapGraphs = (_State->_GraphOptions.size() > 1) && !(IsPeakMeter || IsLevelMeter || IsOscilloscope || IsGoniometer || IsBitMeter);
+
+    GetDlgItem(IDC_OVERLAP_GRAPHS).EnableWindow(SupportsOverlapGraphs);
+
+    /* Graph settings */
+
+    const auto & Options = _State->_GraphOptions[(size_t) _SelectedGraph];
+
+    // Description
+    SetDlgItemText(IDC_GRAPH_DESCRIPTION, Options._Description.c_str());
+
+    /* Use local styles **/
+
+    const bool SupportsLocalStyles = (_State->_GraphOptions.size() > 1);
+
+    GetDlgItem(IDC_USE_LOCAL_STYLES).EnableWindow(SupportsLocalStyles);
+
+    CheckDlgButton(IDC_USE_LOCAL_STYLES, Options._UseLocalStyles);
+
+    // Layout
+    {
+        ((CComboBox) GetDlgItem(IDC_HORIZONTAL_ALIGNMENT)).SetCurSel((int) Options._HorizontalAlignment);
+
+        CheckDlgButton(IDC_FLIP_HORIZONTALLY, Options._FlipHorizontally);
+        CheckDlgButton(IDC_FLIP_VERTICALLY,   Options._FlipVertically);
+
+        // Enable / Disable the required controls.
+        GetDlgItem(IDC_HORIZONTAL_ALIGNMENT).EnableWindow(IsBars);
+
+        const bool SupportsLayout = !(IsOscilloscope || IsGoniometer || IsBitMeter);
+
+        for (const auto ID : { IDC_FLIP_HORIZONTALLY, IDC_FLIP_VERTICALLY })
+            GetDlgItem(ID).EnableWindow(SupportsLayout);
+    }
+
+    {
+        CheckDlgButton(IDC_Y_AXIS_LEFT,   Options._YAxisLeft);
+        CheckDlgButton(IDC_Y_AXIS_RIGHT,  Options._YAxisRight);
+
+        CheckDlgButton(IDC_X_AXIS_TOP,    Options._XAxisTop);
+        CheckDlgButton(IDC_X_AXIS_BOTTOM, Options._XAxisBottom);
+
+        GetDlgItem(IDC_Y_AXIS_LEFT)  .EnableWindow(IsSpectrogram || (Options.HasYAxis() && !(IsLevelMeter || IsOscilloscopeXY)));
+        GetDlgItem(IDC_Y_AXIS_RIGHT) .EnableWindow(IsSpectrogram || (Options.HasYAxis() && !(IsLevelMeter || IsOscilloscopeXY || IsBitMeter)));
+
+        GetDlgItem(IDC_X_AXIS_TOP)   .EnableWindow(IsSpectrogram || (Options.HasXAxis() && !(IsLevelMeter || IsOscilloscope || IsBitMeter)));
+        GetDlgItem(IDC_X_AXIS_BOTTOM).EnableWindow(IsSpectrogram || (Options.HasXAxis() && !(IsLevelMeter || IsOscilloscope)));
+    }
+
+    // X axis
+    {
+        ((CComboBox) GetDlgItem(IDC_X_AXIS_MODE)).SetCurSel((int) Options._XAxisMode);
+
+        SetInteger(IDC_X_AXIS_DECIMALS, Options._XAxisDecimals);
+
+        // Enable / Disable the required controls.
+        GetDlgItem(IDC_X_AXIS_MODE)    .EnableWindow(IsBars || IsCurve || IsSpectrogram);
+        GetDlgItem(IDC_X_AXIS_DECIMALS).EnableWindow(IsBars || IsCurve || IsSpectrogram);
+    }
+
+    // Y axis
+    {
+        ((CComboBox) GetDlgItem(IDC_Y_AXIS_MODE)).SetCurSel((int) Options._YAxisMode);
+
+        SetDouble(IDC_AMPLITUDE_LO, Options._AmplitudeLo, 0, 1);
+        CUpDownCtrl(GetDlgItem(IDC_AMPLITUDE_LO_SPIN)).SetPos32((int) (Options._AmplitudeLo * 10.));
+
+        SetDouble(IDC_AMPLITUDE_HI, Options._AmplitudeHi, 0, 1);
+        CUpDownCtrl(GetDlgItem(IDC_AMPLITUDE_HI_SPIN)).SetPos32((int) (Options._AmplitudeHi * 10.));
+
+        SetDouble(IDC_AMPLITUDE_STEP, Options._AmplitudeStep, 0, 1);
+        CUpDownCtrl(GetDlgItem(IDC_AMPLITUDE_STEP_SPIN)).SetPos32((int) (Options._AmplitudeStep * 10.));
+
+        SendDlgItemMessageW(IDC_USE_ABSOLUTE, BM_SETCHECK, Options._UseAbsolute);
+        SetDouble(IDC_GAMMA, Options._Gamma, 0, 1);
+
+        // Enable / Disable the required controls.
+        const bool SupportsAmplitudeAxis = !(IsOscilloscopeXY || IsGoniometer || IsBitMeter);
+
+        GetDlgItem(IDC_Y_AXIS_MODE) .EnableWindow(SupportsAmplitudeAxis);
+
+        for (const auto & Iter : { IDC_AMPLITUDE_LO, IDC_AMPLITUDE_HI, IDC_AMPLITUDE_STEP })
+            GetDlgItem(Iter).EnableWindow(Options.HasYAxis() && SupportsAmplitudeAxis);
+
+        const bool IsLinear = (Options._YAxisMode == YAxisMode::Linear);
+
+        for (const auto & Iter : { IDC_USE_ABSOLUTE, IDC_GAMMA })
+            GetDlgItem(Iter).EnableWindow(IsLinear && SupportsAmplitudeAxis);
+    }
+
+    // Channels
+    {
+        auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+        CListViewCtrl w(GetDlgItem(IDC_CHANNELS));
+
+        int i = 0;
+
+        for (const auto Channel : _State->_ChannelOrder)
+        {
+            const auto IsSet = ((Options._ActiveChannelMask & (uint32_t) Channel) != 0);
+
+            w.SetCheckState(i++, IsSet ? TRUE : FALSE);
+        }
+    }
+
+    // Channel Pairs
+    const bool SupportsChannelPairs = IsLevelMeter || IsOscilloscopeXY || IsGoniometer;
+
+    {
+        CComboBox w(GetDlgItem(IDC_CHANNEL_PAIRS));
+
+        w.EnableWindow(SupportsChannelPairs);
+        w.SetCurSel((int) Options._ChannelPair);
+    }
+
+    // Swap Channels
+    {
+        SendDlgItemMessageW(IDC_SWAP_CHANNELS, BM_SETCHECK, Options._SwapChannels);
+
+        GetDlgItem(IDC_SWAP_CHANNELS).EnableWindow(SupportsChannelPairs);
+    }
+}
+
+/// <summary>
+/// Terminates the controls of the dialog.
+/// </summary>
+/// <remarks>This is necessary to release the DirectX resources in case the control gets recreated later on.</remarks>
+void graphs_page_t::TerminateControls() noexcept
+{
+    for (auto & Iter : _NumericEdits)
+        Iter->Terminate();
+
+    _NumericEdits.clear();
+}
+
+/// <summary>
+/// Handles an update of the selected item of a combo box.
+/// </summary>
+void graphs_page_t::OnSelectionChanged(UINT, int id, CWindow w) noexcept
+{
+    if (_State == nullptr)
+        return;
+
+    auto ChangedSettings = ConfigurationChanges::All;
+
+    auto cb = (CComboBox) w;
+
+    const int SelectedIndex = cb.GetCurSel();
+
+    switch (id)
+    {
+        default:
+            return;
+
+        case IDC_GRAPH_SETTINGS:
+        {
+            _SelectedGraph = (size_t) ((CListBox) w).GetCurSel();
+
+            UpdateControls();
+
+            return;
+        }
+
+        case IDC_HORIZONTAL_ALIGNMENT:
+        {
+            auto & Options = _State->_GraphOptions[_SelectedGraph];
+
+            Options._HorizontalAlignment = (HorizontalAlignment) SelectedIndex;
+
+            {
+                auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+                UpdateControls();
+            }
+
+            ChangedSettings = ConfigurationChanges::Layout;
+            break;
+        }
+
+        case IDC_X_AXIS_MODE:
+        {
+            auto & Options = _State->_GraphOptions[_SelectedGraph];
+
+            Options._XAxisMode = (XAxisMode) SelectedIndex;
+
+            {
+                auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+                UpdateControls();
+            }
+            break;
+        }
+
+        case IDC_Y_AXIS_MODE:
+        {
+            auto & Options = _State->_GraphOptions[_SelectedGraph];
+
+            Options._YAxisMode = (YAxisMode) SelectedIndex;
+
+            {
+                auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+                UpdateControls();
+            }
+            break;
+        }
+
+        case IDC_CHANNEL_PAIRS:
+        {
+            auto & Options = _State->_GraphOptions[_SelectedGraph];
+
+            Options._ChannelPair = (ChannelPair) SelectedIndex;
+            break;
+        }
+
+        #pragma endregion
+    }
+
+    NotifyParent(ChangedSettings);
+}
+
+/// <summary>
+/// Handles the notification when the content of an edit control has been changed.
+/// </summary>
+void graphs_page_t::OnEditChange(UINT code, int id, CWindow) noexcept
+{
+    if (_IgnoreNotifications || (code != EN_CHANGE) || (_State == nullptr))
+        return;
+
+    auto ChangedSettings = ConfigurationChanges::All;
+    auto & gd = _State->_GraphOptions[_SelectedGraph];
+
+    WCHAR Text[MAX_PATH] = { };
+
+    GetDlgItemTextW(id, Text, _countof(Text));
+
+    switch (id)
+    {
+        default:
+            return;
+
+        case IDC_GRAPH_DESCRIPTION:
+        {
+            gd._Description = Text;
+            break;
+        }
+
+        // X axis
+        case IDC_X_AXIS_DECIMALS:
+        {
+            gd._XAxisDecimals = (uint32_t) std::clamp(::_wtoi(Text), MinXAxisDecimals, MaxXAxisDecimals);
+
+            ChangedSettings = ConfigurationChanges::Layout;
+            break;
+        }
+
+        // Y axis
+        case IDC_AMPLITUDE_LO:
+        {
+            gd._AmplitudeLo = std::clamp(::_wtof(Text), MinAmplitude, gd._AmplitudeHi);
+            break;
+        }
+
+        case IDC_AMPLITUDE_HI:
+        {
+            gd._AmplitudeHi = std::clamp(::_wtof(Text), gd._AmplitudeLo, MaxAmplitude);
+            break;
+        }
+
+        case IDC_AMPLITUDE_STEP:
+        {
+            gd._AmplitudeStep = std::clamp(::_wtof(Text), MinAmplitudeStep, MaxAmplitudeStep);
+            break;
+        }
+
+        case IDC_GAMMA:
+        {
+            gd._Gamma = std::clamp(::_wtof(Text), MinGamma, MaxGamma);
+            break;
+        }
+
+        #pragma endregion
+    }
+
+    NotifyParent(ChangedSettings);
+}
+
+/// <summary>
+/// Handles the notification when a control loses focus.
+/// </summary>
+void graphs_page_t::OnEditLostFocus(UINT, int id, CWindow) noexcept
+{
+    if ((_State == nullptr) || _IgnoreNotifications)
+        return;
+
+    auto ChangedSettings = ConfigurationChanges::All;
+    auto & Options = _State->_GraphOptions[_SelectedGraph];
+
+    switch (id)
+    {
+        default:
+            return;
+
+        case IDC_X_AXIS_DECIMALS:
+        {
+            SetInteger(id, Options._XAxisDecimals);
+
+            ChangedSettings = ConfigurationChanges::Layout;
+            break;
+        }
+
+        case IDC_AMPLITUDE_LO:
+        {
+            SetDouble(id, Options._AmplitudeLo, 0, 1);
+            break;
+        }
+
+        case IDC_AMPLITUDE_HI:
+        {
+            SetDouble(id, Options._AmplitudeHi, 0, 1);
+            break;
+        }
+
+        case IDC_AMPLITUDE_STEP:
+        {
+            SetDouble(id, Options._AmplitudeStep, 0, 1);
+            break;
+        }
+
+        case IDC_GAMMA:
+        {
+            SetDouble(id, Options._Gamma, 0, 1);
+            break;
+        }
+    }
+
+    NotifyParent(ChangedSettings);
+}
+
+/// <summary>
+/// Handles the notification when a button is clicked.
+/// </summary>
+void graphs_page_t::OnButtonClick(UINT, int id, CWindow) noexcept
+{
+    if (_State == nullptr)
+        return;
+
+    auto ChangedSettings = ConfigurationChanges::All;
+
+    auto & Options = _State->_GraphOptions[_SelectedGraph];
+
+    switch (id)
+    {
+        default:
+            return;
+
+        case IDC_ADD_GRAPH:
+        {
+            // Make sure the first graph gets a local copy of the global styles before adding a second grahp.
+            if (_State->_GraphOptions.size() == 1)
+                _State->_GraphOptions[_SelectedGraph]._StyleManager = _State->_StyleManager;
+
+            auto NewOptions = _State->_GraphOptions[_SelectedGraph];
+
+            int Index = (int) _State->_GraphOptions.size();
+
+            WCHAR Description[32]; ::StringCchPrintfW(Description, _countof(Description), L"Graph %d", Index + 1);
+
+            NewOptions._Description = Description;
+
+            _State->_GraphOptions.insert(_State->_GraphOptions.begin() + (int) Index, NewOptions);
+
+            _IsInitializing = true;
+
+            UpdateControls();
+
+            _IsInitializing = false;
+
+            ((CListBox) GetDlgItem(IDC_GRAPH_SETTINGS)).SetCurSel(Index);
+            _SelectedGraph = (size_t) Index;
+            break;
+        }
+
+        case IDC_REMOVE_GRAPH:
+        {
+            _State->_GraphOptions.erase(_State->_GraphOptions.begin() + (int) _SelectedGraph);
+
+            _SelectedGraph = std::clamp(_SelectedGraph, (size_t) 0, _State->_GraphOptions.size() - 1);
+
+            UpdateControls();
+            break;
+        }
+
+        case IDC_VERTICAL_LAYOUT:
+        {
+            _State->_VerticalLayout = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+
+            UpdateControls();
+            break;
+        }
+
+        case IDC_OVERLAP_GRAPHS:
+        {
+            _State->_OverlapGraphs = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+
+            UpdateControls();
+            break;
+        }
+
+        case IDC_USE_LOCAL_STYLES:
+        {
+            Options._UseLocalStyles = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+
+            UpdateControls();
+            break;
+        }
+
+        case IDC_FLIP_HORIZONTALLY:
+        {
+            Options._FlipHorizontally = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+
+        case IDC_FLIP_VERTICALLY:
+        {
+            Options._FlipVertically = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+
+        case IDC_X_AXIS_TOP:
+        {
+            Options._XAxisTop = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+
+        case IDC_X_AXIS_BOTTOM:
+        {
+            Options._XAxisBottom = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+
+        case IDC_Y_AXIS_LEFT:
+        {
+            Options._YAxisLeft = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+
+        case IDC_Y_AXIS_RIGHT:
+        {
+            Options._YAxisRight = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+
+        case IDC_USE_ABSOLUTE:
+        {
+            Options._UseAbsolute = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+
+        case IDC_ALL_CHANNELS:
+        {
+            auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+            CListViewCtrl w(GetDlgItem(IDC_CHANNELS));
+
+            const int Count = w.GetItemCount();
+
+            for (int Index = 0; Index < Count; ++Index)
+                w.SetCheckState(Index, TRUE);
+
+            UpdateActiveChannelMask();
+            break;
+        }
+
+        case IDC_NO_CHANNELS:
+        {
+            auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+            CListViewCtrl w(GetDlgItem(IDC_CHANNELS));
+
+            const int Count = w.GetItemCount();
+
+            for (int Index = 0; Index < Count; ++Index)
+                w.SetCheckState(Index, FALSE);
+
+            UpdateActiveChannelMask();
+            break;
+        }
+
+        case IDC_CHANNEL_UP:
+        {
+            auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+            CListViewCtrl w(GetDlgItem(IDC_CHANNELS));
+
+            const int SrcIndex = w.GetNextItem(-1, LVNI_SELECTED);
+
+            if (SrcIndex <= 0)
+                break;
+
+            const int DstIndex = SrcIndex - 1;
+
+            SwapItems(w, SrcIndex, DstIndex);
+
+            std::swap(_State->_ChannelOrder[(size_t) SrcIndex], _State->_ChannelOrder[(size_t) DstIndex]);
+
+            UpdateActiveChannelMask();
+            break;
+        }
+
+        case IDC_CHANNEL_DOWN:
+        {
+            auto Scope = msc::toggle_t(_IgnoreNotifications, true);
+
+            CListViewCtrl w(GetDlgItem(IDC_CHANNELS));
+
+            const int SrcIndex = w.GetNextItem(-1, LVNI_SELECTED);
+
+            if ((SrcIndex < 0) || (SrcIndex >= w.GetItemCount()- 1))
+                break;
+
+            const int DstIndex = SrcIndex + 1;
+
+            SwapItems(w, SrcIndex, DstIndex);
+
+            std::swap(_State->_ChannelOrder[(size_t) SrcIndex], _State->_ChannelOrder[(size_t) DstIndex]);
+
+            UpdateActiveChannelMask();
+            break;
+        }
+
+        case IDC_SWAP_CHANNELS:
+        {
+            Options._SwapChannels = (bool) SendDlgItemMessageW(id, BM_GETCHECK);
+            break;
+        }
+    }
+
+    NotifyParent(ChangedSettings);
+}
+
+/// <summary>
+/// Handles a notification from an UpDown control.
+/// </summary>
+LRESULT graphs_page_t::OnDeltaPos(LPNMHDR nmh) noexcept
+{
+    if (_State == nullptr)
+        return -1;
+
+    auto ChangedSettings = ConfigurationChanges::All;
+    auto & gd = _State->_GraphOptions[_SelectedGraph];
+
+    auto nmud = (LPNMUPDOWN) nmh;
+
+    switch (nmh->idFrom)
+    {
+        default:
+            return -1;
+
+        case IDC_AMPLITUDE_LO_SPIN:
+        {
+            if (!SetProperty(gd._AmplitudeLo, ClampNewSpinPosition(nmud, MinAmplitude, gd._AmplitudeHi, 10.)))
+                return -1;
+
+            SetDouble(IDC_AMPLITUDE_LO, gd._AmplitudeLo, 0, 1);
+            break;
+        }
+
+        case IDC_AMPLITUDE_HI_SPIN:
+        {
+            if (!SetProperty(gd._AmplitudeHi, ClampNewSpinPosition(nmud, gd._AmplitudeLo, MaxAmplitude, 10.)))
+                return -1;
+
+            SetDouble(IDC_AMPLITUDE_HI, gd._AmplitudeHi, 0, 1);
+            break;
+        }
+
+        case IDC_AMPLITUDE_STEP_SPIN:
+        {
+            if (!SetProperty(gd._AmplitudeStep, ClampNewSpinPosition(nmud, MinAmplitudeStep, MaxAmplitudeStep, 10.)))
+                return -1;
+
+            SetDouble(IDC_AMPLITUDE_STEP, gd._AmplitudeStep, 0, 1);
+            break;
+        }
+    }
+
+    NotifyParent(ChangedSettings);
+
+    return 0;
+}
+
+/// <summary>
+/// Handles the change of a checkbox.
+/// </summary>
+LRESULT graphs_page_t::OnChannelChanged(int, LPNMHDR nmh, BOOL &) noexcept
+{
+    if (_IgnoreNotifications)
+        return 0;
+
+    const auto * nmlv = (const NMLISTVIEW *) nmh;
+
+    if ((nmlv->uChanged & LVIF_STATE) == 0)
+        return 0;
+
+    const auto OldCheckState = nmlv->uOldState & LVIS_STATEIMAGEMASK;
+    const auto NewCheckState = nmlv->uNewState & LVIS_STATEIMAGEMASK;
+
+    if (OldCheckState == NewCheckState)
+        return 0;
+
+    UpdateActiveChannelMask();
+
+    NotifyParent(ConfigurationChanges::All);
+
+    return 0;
+}
+
+/// <summary>
+/// Fills the X-axis mode combobox with the modes relevant to the current visualization.
+/// </summary>
+void graphs_page_t::InitializeXAxisMode() noexcept
+{
+    CComboBox w(GetDlgItem(IDC_X_AXIS_MODE));
+
+    w.ResetContent();
+
+    if (_State->_VisualizationType != VisualizationType::Oscilloscope)
+    {
+        for (const auto & x : { L"None", L"Bands", L"Decades", L"Octaves", L"Notes" })
+            w.AddString(x);
+    }
+    else
+    {
+        for (const auto & x : { L"Off", L"On" })
+            w.AddString(x);
+
+        _State->_GraphOptions[_SelectedGraph]._XAxisMode = (XAxisMode) std::clamp((int) _State->_GraphOptions[_SelectedGraph]._XAxisMode, 0, 1);
+    }
+
+    w.SetCurSel((int) _State->_GraphOptions[_SelectedGraph]._XAxisMode);
+}
+
+/// <summary>
+/// Fills the y-axis mode combobox with the modes relevant to the current visualization.
+/// </summary>
+void graphs_page_t::InitializeYAxisMode() noexcept
+{
+    CComboBox w(GetDlgItem(IDC_Y_AXIS_MODE));
+
+    w.ResetContent();
+
+    if (!((_State->_VisualizationType == VisualizationType::Oscilloscope) && _State->_XYMode))
+    {
+        for (const auto & x : { L"None", L"Decibel", L"Linear/n-th root" })
+            w.AddString(x);
+    }
+    else
+    {
+        for (const auto & x : { L"Off", L"On" })
+            w.AddString(x);
+
+        _State->_GraphOptions[_SelectedGraph]._YAxisMode = (YAxisMode) std::clamp((int) _State->_GraphOptions[_SelectedGraph]._YAxisMode, 0, 1);
+    }
+
+    w.SetCurSel((int) _State->_GraphOptions[_SelectedGraph]._YAxisMode);
+}
+
+/// <summary>
+/// Updates the Active Channel Mask setting with the user interface changes.
+/// </summary>
+void graphs_page_t::UpdateActiveChannelMask() noexcept
+{
+    CListViewCtrl w(GetDlgItem(IDC_CHANNELS));
+
+    const int Count = w.GetItemCount();
+
+    uint32_t NewActiveChanneMask = 0;
+
+    for (int Index = 0; Index < Count; ++Index)
+    {
+        if (w.GetCheckState(Index))
+            NewActiveChanneMask |= (uint32_t) _State->_ChannelOrder[(size_t) Index];
+    }
+
+    _State->_GraphOptions[_SelectedGraph]._ActiveChannelMask = NewActiveChanneMask;
+}
+
+/// <summary>
+/// Swaps two items in a listview.
+/// </summary>
+void graphs_page_t::SwapItems(CListViewCtrl & w, int SrcIndex, int DstIndex) noexcept
+{
+    WCHAR SrcText[64] = { };
+
+    LVITEMW SrcItem =
+    {
+        .mask = ~0u,
+        .iItem = SrcIndex,
+        .pszText = SrcText,
+        .cchTextMax = _countof(SrcText),
+    };
+
+    w.GetItem(&SrcItem);
+
+    WCHAR DstText[64] = { };
+
+    LVITEMW DstItem =
+    {
+        .mask = ~0u,
+        .iItem = DstIndex,
+        .pszText = DstText,
+        .cchTextMax = _countof(DstText),
+    };
+
+    w.GetItem(&DstItem);
+
+    {
+        LVITEM Item = SrcItem;
+
+        Item.iItem = DstIndex;
+
+        w.SetItem(&Item);
+    }
+
+    {
+        LVITEM Item = DstItem;
+
+        Item.iItem = SrcIndex;
+
+        w.SetItem(&Item);
+    }
+
+    // Swap checkbox states.
+    const BOOL SrcChecked = w.GetCheckState(SrcIndex);
+    const BOOL DstChecked = w.GetCheckState(DstIndex);
+
+    w.SetCheckState(DstIndex, SrcChecked);
+    w.SetCheckState(SrcIndex, DstChecked);
+
+    // Remove selection and focus from the old position.
+    w.SetItemState(SrcIndex, 0, LVIS_SELECTED | LVIS_FOCUSED);
+
+    // Select and focus the new position.
+    w.SetItemState(DstIndex, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+
+    w.EnsureVisible(DstIndex, FALSE);
+    w.SetFocus();
+}

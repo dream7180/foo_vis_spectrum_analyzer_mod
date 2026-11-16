@@ -1,0 +1,87 @@
+
+/** $VER: Support.cpp (2026.09.30) P. Stuer **/
+
+#include "pch.h"
+
+#include "Support.h"
+#include "CustomTitleformatHook.h"
+
+#include "Module.h"
+
+#include <d2d1_2.h>
+
+#include <wrl/client.h>
+
+using Microsoft::WRL::ComPtr;
+
+#include <shellscalingapi.h>
+
+#pragma comment(lib, "shcore")
+
+#pragma hdrstop
+
+/// <summary>
+/// Initialize our DPI awareness.
+/// </summary>
+HRESULT InitializeDpiAwareness() noexcept
+{
+    return ::SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE); // Stick with Windows 8.1 for now.
+}
+
+/// <summary>
+/// Gets the DPI setting of the specified window.
+/// </summary>
+HRESULT GetDPI(HWND hWnd, UINT & dpi) noexcept
+{
+    auto Module = module_t(L"user32.dll");
+
+    typedef UINT (WINAPI * GetDpiForWindow_t)(HWND hwnd);
+
+    #pragma warning(disable: 4191) // 'type cast': unsafe conversion from 'FARPROC' to 'GetDPI::GetDpiForWindow_t'
+    const auto GetDpiForWindow_ = (GetDpiForWindow_t) Module.GetFunctionAddress("GetDpiForWindow"); // Windows 10 or higher
+
+    if (GetDpiForWindow_ != nullptr)
+        dpi = GetDpiForWindow_(hWnd);
+    else
+    {
+        ComPtr<ID2D1Factory2> D2DFactory;
+
+        D2D1_FACTORY_OPTIONS const Options = { D2D1_DEBUG_LEVEL_NONE };
+
+        HRESULT hr = ::D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, Options, D2DFactory.GetAddressOf());
+
+        if (SUCCEEDED(hr))
+        {
+            FLOAT DPIX, DPIY;
+
+            #pragma warning(disable: 4996) // 'ID2D1Factory::GetDesktopDpi': Deprecated.
+            D2DFactory->GetDesktopDpi(&DPIX, &DPIY);
+            #pragma warning(default: 4996)
+
+            dpi = (UINT) DPIX;
+        }
+        else
+            dpi = 72;
+    }
+
+    return S_OK;
+}
+
+/// <summary>
+/// Evaluates a foobar2000 Title Format script.
+/// </summary>
+HRESULT EvaluateTitleFormatScript(const std::wstring & script, pfc::string & result) noexcept
+{
+    service_ptr_t<titleformat_object> tfo;
+
+    static_api_ptr_t<titleformat_compiler>()->compile_safe_ex(tfo, pfc::utf8FromWide(script.c_str()));
+
+    if (!tfo.is_valid())
+        return S_FALSE;
+
+    custom_titleformat_hook_t Hook;
+
+    tfo->run(&Hook, result, nullptr);
+
+    return S_OK;
+}

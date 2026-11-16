@@ -1,0 +1,103 @@
+
+/** $VER: CustomTitleFormatHook.h (2026.03.22) P. Stuer - Implements a custom hook to expand title formatting **/
+
+#pragma once
+
+#undef ExpandEnvironmentStrings
+
+class custom_titleformat_hook_t : public titleformat_hook
+{
+public:
+    custom_titleformat_hook_t() { }
+
+    virtual ~custom_titleformat_hook_t() noexcept { }
+
+    bool process_field(titleformat_text_out * out, const char * name, t_size nameSize, bool & isFound) override final
+    {
+        pfc::string Path;
+
+        if (::_stricmp(name, "fb2k_path") == 0)
+        {
+            ::uGetModuleFileName(NULL, Path);
+
+            Path = pfc::string_directory(Path);
+
+            out->write(titleformat_inputtypes::unknown, Path);
+
+            isFound = true;
+
+            return true;
+        }
+        else
+        if (::_stricmp(name, "fb2k_component_path") == 0)
+        {
+            ::uGetModuleFileName(core_api::get_my_instance(), Path);
+
+            Path = pfc::string_directory(Path);
+
+            out->write(titleformat_inputtypes::unknown, Path);
+
+            isFound = true;
+
+            return true;
+        }
+        else
+        if (::_stricmp(name, "fb2k_profile_path") == 0)
+        {
+            Path = core_api::get_profile_path();
+
+            Path = foobar2000_io::filesystem::g_get_native_path(Path);
+
+            out->write(titleformat_inputtypes::unknown, Path);
+
+            isFound = true;
+
+            return true;
+        }
+        else
+        {
+            std::string Name = "%"; Name += name; Name += "%";
+
+            Path = ExpandEnvironmentStrings(Name.c_str()).c_str();
+
+            out->write(titleformat_inputtypes::unknown, Path);
+
+            isFound = true;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    bool process_function(titleformat_text_out * out, const char * name, t_size nameSize, titleformat_hook_function_params * parameters, bool & isFound) override final
+    {
+        return false;
+    }
+
+private:
+    /// <summary>
+    /// Expands the environment variables in the specified string.
+    /// </summary>
+    std::string ExpandEnvironmentStrings(const char * src) noexcept
+    {
+        if (src == nullptr)
+            return { };
+
+        const DWORD Size = ::ExpandEnvironmentStringsA(src, nullptr, 0);
+
+        if (Size == 0)
+            return { };
+
+        std::string Dst(Size, '\0');
+
+        DWORD BytesStored = ::ExpandEnvironmentStringsA(src, (LPSTR) Dst.data(), (DWORD) Dst.size());
+
+        if ((BytesStored == 0) || (BytesStored > Size))
+            return {};
+
+        Dst.resize(BytesStored - 1);
+
+        return Dst;
+    }
+};

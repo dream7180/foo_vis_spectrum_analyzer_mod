@@ -1,0 +1,127 @@
+
+/** $VER: Spectrum.h (2026.10.10) P. Stuer -  Implements a spectrum analyzer visualization **/
+
+#pragma once
+
+#include <SDKDDKVer.h>
+#include <WinSock2.h>
+#include <Windows.h>
+
+#include "Visualization.h"
+
+#include "XAxis.h"
+#include "YAxis.h"
+
+#include <vector>
+
+/// <summary>
+/// Implements the visualisation of the spectrum.
+/// </summary>
+class spectrum_t : public visualization_t
+{
+public:
+    spectrum_t() = default;
+
+    spectrum_t(const spectrum_t &) = delete;
+    spectrum_t & operator=(const spectrum_t &) = delete;
+    spectrum_t(spectrum_t &&) = delete;
+    spectrum_t & operator=(spectrum_t &&) = delete;
+
+    virtual ~spectrum_t();
+
+    // element_t
+    void Move(const D2D1_RECT_F & rect) noexcept override final;
+    void Render(ID2D1DeviceContext * deviceContext) noexcept override final;
+    void Reset() noexcept override final;
+
+    void OnConfigurationChanged(ConfigurationChanges configurationChanges) noexcept override final;
+
+    // visualization_t
+    void Configure(state_t * state, graph_options_t * graphOptions, analysis_t * analysis, bool isFirst, bool isLast, ID3D11Device * d3dDevice = nullptr, ID3D11DeviceContext * d3dDeviceContext = nullptr) noexcept override final;
+
+private:
+    HRESULT CreateDeviceSpecificResources(ID2D1DeviceContext * deviceContext) noexcept;
+    void DeleteDeviceSpecificResources() noexcept;
+
+    HRESULT CreateSizeDependentResources(ID2D1DeviceContext * deviceContext) noexcept;
+    void DeleteSizeDependentResources() noexcept;
+
+    HRESULT CreateColorDependentResources(ID2D1DeviceContext * deviceContext) noexcept;
+    void DeleteColorDependentResources() noexcept;
+
+    const D2D1_RECT_F & GetClientRect() const noexcept { return _ClientRect; }
+
+    void Initialize() noexcept;
+
+    void RenderBars(ID2D1DeviceContext * deviceContext) noexcept;
+    void RenderBar(ID2D1DeviceContext * deviceContext, D2D1_RECT_F & rect, const style_t & areaStyle, const style_t & topStyle, double value, double opacity) noexcept;
+
+    void RenderBarSegment(ID2D1DeviceContext * deviceContext, D2D1_RECT_F & rect, const style_t & style) const noexcept;
+
+    void RenderCurve(ID2D1DeviceContext * deviceContext) noexcept;
+    void RenderRadialBars(ID2D1DeviceContext * deviceContext) noexcept;
+    void RenderRadialCurve(ID2D1DeviceContext * deviceContext) noexcept;
+
+    void RenderNyquistFrequencyMarker(ID2D1DeviceContext * deviceContext) const noexcept;
+
+    void RenderDiagnostics(ID2D1DeviceContext * deviceContext) const noexcept;
+
+    HRESULT CreateOpacityMask(ID2D1DeviceContext * deviceContext) noexcept;
+
+    struct geometry_points_t
+    {
+        std::vector<D2D1_POINT_2F> p0; // Determines how many knots will be used to calculate control points.
+        std::vector<D2D1_POINT_2F> p1; // First control points
+        std::vector<D2D1_POINT_2F> p2; // Second control points
+
+        void Clear()
+        {
+            p0.clear();
+            p1.clear();
+            p2.clear();
+        }
+    };
+
+    HRESULT CreateGeometryPointsFromAmplitude(geometry_points_t & gp, bool usePeak) const noexcept;
+    HRESULT CreateCurve(const geometry_points_t & gp, bool isFilled, ID2D1PathGeometry ** curve) const noexcept;
+
+    HRESULT CreateSegment(FLOAT a1, FLOAT a2, FLOAT r1, FLOAT r2, ID2D1PathGeometry ** segment) const noexcept;
+
+    HRESULT CreateRadialGeometryPointsFromAmplitude(geometry_points_t & gp, bool usePeak) const noexcept;
+    HRESULT CreateRadialCurve(const geometry_points_t & gp, FLOAT innerRadius, bool isFilled, ID2D1PathGeometry ** curve) const noexcept;
+
+private:
+    static constexpr FLOAT PaddingX = 0.f;
+    static constexpr FLOAT PaddingY = 0.f;
+
+    D2D1_RECT_F _ClientRect;
+    D2D1_SIZE_F _ClientSize;
+
+    x_axis_t _XAxis;
+    y_axis_t _YAxis;
+
+    FLOAT _LEDSize;
+
+    msc::chrono_t _Chrono;
+
+    // Device-dependent resources
+    ComPtr<ID2D1SolidColorBrush> _DebugBrush;
+    ComPtr<ID2D1Bitmap> _OpacityMask;
+
+    style_t _BarAreaStyle;
+    style_t _BarTopStyle;
+    style_t _BarPeakAreaStyle;
+    style_t _BarPeakTopStyle;
+    style_t _DarkBackgroundStyle;
+    style_t _LightBackgroundStyle;
+
+    style_t _CurveLineStyle;
+    style_t _CurveAreaStyle;
+    style_t _CurvePeakLineStyle;
+    style_t _CurvePeakAreaStyle;
+
+    style_t _NyquistMarkerStyle;
+
+    style_t _WindowFunctionStyle;
+    style_t _WeighingFunctionStyle;
+};

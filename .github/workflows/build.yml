@@ -5,7 +5,6 @@ name: Build
 # 目录布局（${{ github.workspace }}\src 相当于 README 里的工作根目录）：
 #   src\3rdParty\columns_ui_sdk\      <- Columns UI SDK 8.0.0（外部下载）
 #   src\3rdParty\WTL10_10320\         <- WTL 10.0.10320（外部下载）
-#   src\3rdParty\pfc, \foobar2000\    <- 指向 src\sdk 下同名目录的目录联接（见下文说明）
 #   src\sdk\                          <- foobar2000 SDK 2026-09-17（外部下载，含 WTL 头文件副本）
 #   src\bin, src\bin.x86\             <- 便携版 foobar2000（CI 中用占位文件）
 #   src\foo_vis_spectrum_analyzer\    <- 本仓库
@@ -57,8 +56,7 @@ jobs:
         with:
           path: src/foo_vis_spectrum_analyzer
 
-      # 第三方依赖体积不大但下载慢，缓存解压后的结果，key 里带上版本号。
-      # 只缓存真实解压出来的三个目录，目录联接每次运行重建，不进缓存。
+      # 第三方依赖体积不大但下载慢，缓存解压后的结果，key 里带上版本号
       - name: 缓存第三方依赖
         uses: actions/cache@v4
         with:
@@ -148,22 +146,36 @@ jobs:
           Expand-Into (Get-Dependency $env:WTL_URL "WTL_${env:WTL_VERSION}_Release.zip") `
             'Include/atlapp.h' (Join-Path $work '3rdParty\WTL10_10320') $sevenZip
 
-          # Columns UI SDK 的工程用 '../pfc/pfc.h'、'../foobar2000/SDK/*.h' 引用 SDK，
-          # 也就是要求 pfc 和 foobar2000 与 columns_ui_sdk 同级（SDK 原始的目录形态）。
-          # 而主工程是按 ..\sdk 去找 SDK 的，所以这里用目录联接把它们映射过去，避免重复拷贝。
-          function New-AliasDir([string] $link, [string] $target) {
-            if (-not (Test-Path $target)) { throw "缺少依赖目录：$target" }
-            $existing = Get-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue
-            if ($existing) {
-              if ($existing.LinkType -eq 'Junction') { return }
-              Remove-Item -LiteralPath $link -Recurse -Force
-            }
-            New-Item -ItemType Junction -Path $link -Target $target | Out-Null
-            Write-Host "已建立目录联接：$link"
-          }
+          # Columns UI SDK 的头文件用 '../pfc/pfc.h'、'../foobar2000/SDK/*.h' 找 SDK，
+          # 也就是它期望自己被解压到 SDK 目录里（pfc、foobar2000 与它同级）。
+          # 但 SDK 实际在 ..\..\sdk，且【不能】在 3rdParty 下再放一份 pfc/foobar2000：
+          # 同一个头文件会以两种路径各被包含一次，而 SDK 头文件用的是 #pragma once
+          # （按路径判重），结果就是 C2011/C2084 大量重定义。
+          # 所以这里只做两件事，让所有引用都收敛到 sdk 下的同一条真实路径：
+          #   1) 把 ui_extension.h 里的 '../pfc/'、'../foobar2000/' 改成相对 SDK 根的写法；
+          #   2) 给 CUI 工程补一个 ..\..\sdk 包含目录。
+          $cuiRoot    = Join-Path $work '3rdParty\columns_ui_sdk'
+          $cuiProject = Join-Path $cuiRoot 'columns_ui-sdk-public.vcxproj'
 
-          New-AliasDir (Join-Path $work '3rdParty\pfc') (Join-Path $work 'sdk\pfc')
-          New-AliasDir (Join-Path $work '3rdParty\foobar2000') (Join-Path $work 'sdk\foobar2000')
+          $patched = 0
+          Get-ChildItem -LiteralPath $cuiRoot -Recurse -File -Include *.h, *.cpp | ForEach-Object {
+            $text = Get-Content -LiteralPath $_.FullName -Raw
+            if ($text -match '"\.\./(pfc|foobar2000)/') {
+              $text = $text.Replace('"../pfc/', '"pfc/').Replace('"../foobar2000/', '"foobar2000/')
+              Set-Content -LiteralPath $_.FullName -Value $text -NoNewline -Encoding utf8
+              $patched++
+            }
+          }
+          if ($patched -gt 0) { Write-Host "已改写 $patched 个文件里的 ../pfc、../foobar2000 引用" }
+
+          $project = Get-Content -LiteralPath $cuiProject -Raw
+          if ($project -notmatch [regex]::Escape('..\..\sdk')) {
+            $project = $project.Replace(
+              '<AdditionalIncludeDirectories>..</AdditionalIncludeDirectories>',
+              '<AdditionalIncludeDirectories>..;..\..\sdk</AdditionalIncludeDirectories>')
+            Set-Content -LiteralPath $cuiProject -Value $project -NoNewline -Encoding utf8
+            Write-Host '已给 columns_ui-sdk-public.vcxproj 补上 ..\..\sdk 包含目录'
+          }
 
           # SDK 自带的 libPPUI / foobar2000_sdk_helpers 工程只把 '..'（即 sdk 根）放进包含目录，
           # 然后用 <atlapp.h>、<atlctrls.h> 找 WTL。WTL 的 Include 目录不在它们的搜索路径里，
@@ -188,17 +200,25 @@ jobs:
           # 逐个确认各工程真正需要的头文件都落在它期望的位置上，早失败、错误信息也直白
           $required = @(
             'sdk\pfc\pfc.vcxproj',
+            'sdk\pfc\pfc.h',
             'sdk\foobar2000\SDK\foobar2000_SDK.vcxproj',
+            'sdk\foobar2000\SDK\foobar2000-lite.h',
             'sdk\atlapp.h',
             'sdk\atlctrls.h',
             '3rdParty\columns_ui_sdk\columns_ui-sdk-public.vcxproj',
-            '3rdParty\columns_ui_sdk\..\pfc\pfc.h',
-            '3rdParty\columns_ui_sdk\..\foobar2000\SDK\foobar2000-lite.h',
             '3rdParty\WTL10_10320\Include\atlapp.h'
           )
           $missing = @($required | Where-Object { -not (Test-Path (Join-Path $work $_)) })
           if ($missing.Count -gt 0) {
             throw "依赖目录不完整，缺少：$($missing -join ', ')"
+          }
+
+          # 改写是否生效（否则 CUI 头文件又会按 3rdParty 之外的位置去解析）
+          $leftover = Get-ChildItem -LiteralPath $cuiRoot -Recurse -File -Include *.h, *.cpp |
+            Where-Object { (Get-Content -LiteralPath $_.FullName -Raw) -match '"\.\./(pfc|foobar2000)/' }
+          if ($leftover) { throw "以下文件仍有 ../pfc 或 ../foobar2000 引用：$($leftover.Name -join ', ')" }
+          if ((Get-Content -LiteralPath $cuiProject -Raw) -notmatch [regex]::Escape('..\..\sdk')) {
+            throw 'columns_ui-sdk-public.vcxproj 的包含目录未补上 ..\..\sdk'
           }
 
           Write-Host '依赖就绪：'
